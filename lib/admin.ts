@@ -13,9 +13,17 @@ const DEVELOPMENT_COOKIE = 'pmts_admin_dev';
 function configuredSecrets() {
   const environment = env as unknown as AdminEnvironment;
   return {
-    password: environment.ADMIN_PASSWORD?.trim() ?? '',
-    sessionSecret: environment.ADMIN_SESSION_SECRET?.trim() ?? '',
+    password: secretValue(environment, 'ADMIN_PASSWORD'),
+    sessionSecret: secretValue(environment, 'ADMIN_SESSION_SECRET'),
   };
+}
+
+function secretValue(environment: AdminEnvironment, name: keyof AdminEnvironment) {
+  const runtimeValue = environment[name];
+  if (typeof runtimeValue === 'string') return runtimeValue.trim();
+
+  const processValue = process.env[name];
+  return typeof processValue === 'string' ? processValue.trim() : '';
 }
 
 export function isAdminSignInConfigured() {
