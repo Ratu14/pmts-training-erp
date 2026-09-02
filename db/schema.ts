@@ -8,9 +8,20 @@ export const settings = sqliteTable('settings', {
 
 export const candidates = sqliteTable('candidates', {
   id: text('id').primaryKey(),
+  serialNumber: integer('serial_number'),
+  enrollmentYear: integer('enrollment_year'),
   name: text('name').notNull(),
   phone: text('phone'),
   enrolledAt: text('enrolled_at').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_candidates_serial_year').on(table.serialNumber, table.enrollmentYear),
+]);
+
+export const trainers = sqliteTable('trainers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
 });
@@ -23,6 +34,7 @@ export const trainingSessions = sqliteTable(
     sessionDate: text('session_date').notNull(),
     timeSlot: text('time_slot').notNull(),
     status: text('status').notNull().default('Scheduled'),
+    trainerId: text('trainer_id').references(() => trainers.id),
     trainerName: text('trainer_name'),
     notes: text('notes'),
     createdAt: text('created_at').notNull(),
