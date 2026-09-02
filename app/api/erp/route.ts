@@ -1,5 +1,7 @@
 import { getD1 } from '@/db';
 
+const sessionStatuses = new Set(['Completed', 'Scheduled', 'No-show', 'Cancelled']);
+
 function requiredString(value: unknown, label: string) {
   if (typeof value !== 'string' || !value.trim()) throw new Error(`${label} is required.`);
   return value.trim();
@@ -11,9 +13,10 @@ export async function GET() {
     const [settings, candidates, sessions] = await db.batch([
       db.prepare('SELECT training_target AS trainingTarget FROM settings WHERE id = ?').bind('primary'),
       db.prepare('SELECT id, name, phone, enrolled_at AS enrolledAt, is_active AS isActive FROM candidates WHERE is_active = 1 ORDER BY enrolled_at DESC, name ASC'),
-      db.prepare('SELECT s.id, s.candidate_id AS candidateId, c.name AS candidateName, s.session_date AS sessionDate, s.time_slot AS timeSlot, s.status, s.trainer_name AS trainerName, s.notes FROM training_sessions s JOIN candidates c ON c.id = s.candidate_id ORDER BY s.session_date DESC, s.time_slot ASC LIMIT 100'),
+      db.prepare('SELECT s.id, s.candidate_id AS candidateId, c.name AS candidateName, s.session_date AS sessionDate, s.time_slot AS timeSlot, s.status, s.trainer_name AS trainerName, s.notes FROM training_sessions s JOIN candidates c ON c.id = s.candidate_id ORDER BY s.session_date ASC, s.time_slot ASC LIMIT 100'),
     ]);
-    return Response.json({ trainingTarget: settings.results[0]?.trainingTarget ?? 15, candidates: candidates.results, sessions: sessions.results });
+    const primarySetting = settings.results[0] as { trainingTarget?: number } | undefined;
+    return Response.json({ trainingTarget: primarySetting?.trainingTarget ?? 15, candidates: candidates.results, sessions: sessions.results });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to load ERP data.' }, { status: 503 });
   }
@@ -25,9 +28,10 @@ export async function POST(request: Request) {
     const db = getD1();
     const timestamp = new Date().toISOString();
     if (payload.action === 'candidate') {
-      const id = requiredString(payload.id, 'Candidate ID');
       const name = requiredString(payload.name, 'Candidate name');
       const enrolledAt = requiredString(payload.enrolledAt, 'Enrollment date');
+      const nextId = await db.prepare("SELECT COALESCE(MAX(CAST(SUBSTR(id, 4) AS INTEGER)), 95) + 1 AS next_id FROM candidates WHERE id GLOB 'TR-[0-9]*'").first<{ next_id: number }>();
+      const id = `TR-${String(nextId?.next_id ?? 96).padStart(3, '0')}`;
       await db.prepare('INSERT INTO candidates (id, name, phone, enrolled_at, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)').bind(id, name, typeof payload.phone === 'string' ? payload.phone.trim() : null, enrolledAt, timestamp).run();
       return Response.json({ ok: true, id }, { status: 201 });
     }
@@ -36,6 +40,7 @@ export async function POST(request: Request) {
       const sessionDate = requiredString(payload.sessionDate, 'Session date');
       const timeSlot = requiredString(payload.timeSlot, 'Time slot');
       const status = requiredString(payload.status, 'Status');
+      if (!sessionStatuses.has(status)) throw new Error('Session status is not valid.');
       const id = crypto.randomUUID();
       await db.prepare('INSERT INTO training_sessions (id, candidate_id, session_date, time_slot, status, trainer_name, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(id, candidateId, sessionDate, timeSlot, status, typeof payload.trainerName === 'string' ? payload.trainerName.trim() : null, typeof payload.notes === 'string' ? payload.notes.trim() : null, timestamp).run();
       return Response.json({ ok: true, id }, { status: 201 });
@@ -43,7 +48,9 @@ export async function POST(request: Request) {
     if (payload.action === 'session-status') {
       const id = requiredString(payload.id, 'Session ID');
       const status = requiredString(payload.status, 'Status');
-      await db.prepare('UPDATE training_sessions SET status = ? WHERE id = ?').bind(status, id).run();
+      if (!sessionStatuses.has(status)) throw new Error('Session status is not valid.');
+      const result = await db.prepare('UPDATE training_sessions SET status = ? WHERE id = ?').bind(status, id).run();
+      if (!result.meta.changes) throw new Error('Training session was not found.');
       return Response.json({ ok: true, id });
     }
     if (payload.action === 'settings') {
