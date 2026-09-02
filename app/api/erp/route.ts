@@ -1,4 +1,5 @@
 import { getD1 } from '@/db';
+import { AccessError, requireAuthenticated } from '@/lib/access';
 
 const sessionStatuses = new Set(['Completed', 'Scheduled', 'No-show', 'Cancelled']);
 const defaultTrainers = [
@@ -34,8 +35,9 @@ async function ensureDefaultTrainers(db: ReturnType<typeof getD1>) {
   ).bind(item.id, item.name, createdAt)));
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    await requireAuthenticated(request);
     const db = getD1();
     await ensureDefaultTrainers(db);
     const [settings, candidates, sessions, trainers] = await db.batch([
@@ -66,12 +68,16 @@ export async function GET() {
       trainers: trainers.results,
     });
   } catch (error) {
+    if (error instanceof AccessError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to load ERP data.' }, { status: 503 });
   }
 }
 
 export async function POST(request: Request) {
   try {
+    await requireAuthenticated(request);
     const payload = (await request.json()) as Record<string, unknown>;
     const db = getD1();
     const timestamp = new Date().toISOString();
@@ -117,15 +123,11 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, id });
     }
 
-    if (payload.action === 'settings') {
-      const target = Number(payload.trainingTarget);
-      if (!Number.isInteger(target) || target < 1) throw new Error('Training target must be a positive whole number.');
-      await db.prepare('INSERT INTO settings (id, training_target, updated_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET training_target = excluded.training_target, updated_at = excluded.updated_at').bind('primary', target, timestamp).run();
-      return Response.json({ ok: true });
-    }
-
     return Response.json({ error: 'Unsupported ERP action.' }, { status: 400 });
   } catch (error) {
+    if (error instanceof AccessError) {
+      return Response.json({ error: error.message }, { status: error.status });
+    }
     const message = error instanceof Error ? error.message : 'Unable to update ERP data.';
     const isDuplicateCandidate = /unique constraint failed: candidates\.id/i.test(message);
     return Response.json({ error: isDuplicateCandidate ? 'This candidate serial number is already in use for that year.' : message }, { status: 400 });

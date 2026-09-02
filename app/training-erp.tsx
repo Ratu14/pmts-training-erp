@@ -74,6 +74,17 @@ type ApiPayload = {
   trainers?: unknown;
   error?: unknown;
 };
+type AccessState = {
+  configured: boolean;
+  email: string | null;
+  role: 'admin' | 'general';
+};
+type AccessPayload = {
+  configured?: unknown;
+  email?: unknown;
+  error?: unknown;
+  role?: unknown;
+};
 
 const STATUSES: Status[] = ['Scheduled', 'Completed', 'No-show', 'Cancelled'];
 const navItems = [
@@ -152,10 +163,34 @@ async function postERP(payload: Record<string, unknown>) {
   return result;
 }
 
+async function postAdmin(payload: Record<string, unknown>) {
+  const response = await fetch('/api/admin', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const result = (await response.json().catch(() => ({}))) as {
+    error?: unknown;
+  };
+  if (!response.ok) {
+    throw new Error(
+      typeof result.error === 'string'
+        ? result.error
+        : 'Unable to save this administrator change.',
+    );
+  }
+  return result;
+}
+
 export function TrainingERP() {
   const pathname = usePathname() ?? '/';
   const searchParams = useSearchParams();
   const page = navItems.find((item) => item.href === pathname) ?? navItems[0];
+  const [access, setAccess] = useState<AccessState>({
+    configured: false,
+    email: null,
+    role: 'general',
+  });
   const [target, setTarget] = useState(15);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -168,11 +203,31 @@ export function TrainingERP() {
   const [message, setMessage] = useState<string | null>(null);
   const [candidateSerial, setCandidateSerial] = useState('');
   const [enrollmentDate, setEnrollmentDate] = useState(today());
+  const isAdmin = access.role === 'admin';
+  const visibleNavItems = isAdmin
+    ? navItems
+    : navItems.filter((item) => item.href !== '/settings');
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
+        const accessResponse = await fetch('/api/access', { cache: 'no-store' });
+        const accessPayload = (await accessResponse.json().catch(() => ({}))) as AccessPayload;
+        if (!accessResponse.ok) {
+          throw new Error(
+            typeof accessPayload.error === 'string'
+              ? accessPayload.error
+              : 'Unable to confirm your ERP access.',
+          );
+        }
+        if (!mounted) return;
+        setAccess({
+          configured: accessPayload.configured === true,
+          email: typeof accessPayload.email === 'string' ? accessPayload.email : null,
+          role: accessPayload.role === 'admin' ? 'admin' : 'general',
+        });
+
         const response = await fetch('/api/erp', { cache: 'no-store' });
         const payload = (await response.json().catch(() => ({}))) as ApiPayload;
         if (!response.ok)
@@ -436,7 +491,7 @@ export function TrainingERP() {
     setSaving(true);
     setMessage(null);
     try {
-      await postERP({ action: 'settings', trainingTarget: value });
+      await postAdmin({ action: 'settings', trainingTarget: value });
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -463,7 +518,7 @@ export function TrainingERP() {
           </div>
         </a>
         <nav className="mt-10 space-y-1" aria-label="Primary navigation">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const active = page.href === item.href;
             return (
               <a
@@ -490,12 +545,14 @@ export function TrainingERP() {
           <p className="mt-1 text-xs leading-5 text-[#c9c9ef]">
             Every learner progresses against the same completion target.
           </p>
-          <a
-            href="/settings"
-            className="mt-4 inline-block text-xs font-medium text-white underline decoration-[#7878bf] underline-offset-4"
-          >
-            Manage settings
-          </a>
+          {isAdmin && (
+            <a
+              href="/settings"
+              className="mt-4 inline-block text-xs font-medium text-white underline decoration-[#7878bf] underline-offset-4"
+            >
+              Manage settings
+            </a>
+          )}
         </div>
       </aside>
 
@@ -521,6 +578,18 @@ export function TrainingERP() {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <Badge
+              variant="outline"
+              className={
+                'hidden h-7 border-[#dfe2ec] px-2.5 text-[10px] uppercase tracking-[0.12em] sm:inline-flex ' +
+                (isAdmin
+                  ? 'bg-[#ececff] text-[#363681]'
+                  : 'bg-white text-[#686c80]')
+              }
+              title={access.email ?? undefined}
+            >
+              {isAdmin ? 'Admin access' : 'General access'}
+            </Badge>
             <a
               href="/training-log"
               className="hidden h-7 items-center gap-1 rounded-lg border border-[#e5e7f0] bg-white px-2.5 text-[0.8rem] font-medium hover:bg-[#f3f4f8] sm:inline-flex"
@@ -539,7 +608,7 @@ export function TrainingERP() {
             aria-label="Mobile navigation"
           >
             <div className="grid grid-cols-2 gap-1">
-              {navItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
@@ -614,15 +683,18 @@ export function TrainingERP() {
               target={target}
             />
           )}
-          {loaded && page.href === '/settings' && (
-            <Settings
-              target={target}
-              trainers={trainers}
-              saving={saving}
-              onChange={setTarget}
-              onSave={saveTarget}
-            />
-          )}
+          {loaded && page.href === '/settings' &&
+            (isAdmin ? (
+              <Settings
+                target={target}
+                trainers={trainers}
+                saving={saving}
+                onChange={setTarget}
+                onSave={saveTarget}
+              />
+            ) : (
+              <SettingsRestricted configured={access.configured} />
+            ))}
         </div>
       </main>
 
@@ -1484,6 +1556,38 @@ function Reports({
         />
       </div>
     </>
+  );
+}
+
+function SettingsRestricted({ configured }: { configured: boolean }) {
+  return (
+    <Card className="border border-dashed border-[#cfd2e4] bg-white">
+      <CardContent className="flex min-h-80 flex-col items-center justify-center text-center">
+        <div className="grid size-12 place-items-center rounded-2xl bg-[#ececff] text-[#3f3f91]">
+          <Icon icon={Settings01Icon} size={22} />
+        </div>
+        <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.16em] text-[#777b91]">
+          Administrator only
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
+          Settings are protected
+        </h2>
+        <p className="mt-2 max-w-md text-sm leading-6 text-[#686d81]">
+          General users can work with candidate and training records, but only an administrator can view or change operational settings.
+        </p>
+        {!configured && (
+          <p className="mt-3 max-w-md text-xs leading-5 text-[#9b3039]">
+            Secure access is still being configured for this ERP.
+          </p>
+        )}
+        <a
+          href="/"
+          className="mt-6 text-sm font-medium text-[#4b4b9d] underline underline-offset-4"
+        >
+          Return to dashboard
+        </a>
+      </CardContent>
+    </Card>
   );
 }
 
