@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
+    "build:cloudflare": "vinext build && node scripts/prepare-cloudflare.mjs",
+    "deploy:cloudflare": "pnpm run build:cloudflare && pnpm exec wrangler d1 migrations apply pmts-training-erp-db --remote --config dist/server/wrangler.json && pnpm exec wrangler deploy --config dist/server/wrangler.json",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",
