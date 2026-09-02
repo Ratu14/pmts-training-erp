@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
 import {
@@ -905,14 +905,65 @@ function CandidatePicker({
   candidates: ProgressCandidate[];
 }) {
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const matches = candidates.filter((item) =>
-    (item.name + ' ' + item.id).toLocaleLowerCase().includes(normalizedQuery),
-  );
-  const selectedIsVisible = matches.some((item) => item.id === candidate.id);
+  const matches = normalizedQuery
+    ? candidates.filter((item) =>
+        (item.name + ' ' + item.id).toLocaleLowerCase().includes(normalizedQuery),
+      )
+    : candidates;
+
+  useEffect(() => {
+    setHighlighted(0);
+  }, [query, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false);
+        setQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [open]);
+
+  function selectCandidate(id: string) {
+    setOpen(false);
+    setQuery('');
+    window.location.assign('/?candidate=' + encodeURIComponent(id));
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setOpen(true);
+      setHighlighted((index) => Math.min(index + 1, matches.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setOpen(true);
+      setHighlighted((index) => Math.max(index - 1, 0));
+    } else if (event.key === 'Enter') {
+      const match = matches[highlighted];
+      if (open && match) {
+        event.preventDefault();
+        selectCandidate(match.id);
+      }
+    } else if (event.key === 'Escape') {
+      setOpen(false);
+      setQuery('');
+    }
+  }
 
   return (
-    <div className="w-full xl:w-[310px]">
+    <div ref={containerRef} className="relative w-full xl:w-[310px]">
       <label htmlFor="candidate-search" className="mb-2 block font-mono text-[10px] uppercase tracking-[0.15em] text-[#777b91]">
         Selected candidate
       </label>
@@ -924,37 +975,66 @@ function CandidatePicker({
         />
         <Input
           id="candidate-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          value={open ? query : `${candidate.name} · ${candidate.id}`}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => {
+            setOpen(true);
+            setQuery('');
+          }}
+          onKeyDown={handleKeyDown}
           placeholder="Search name or serial no."
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls="candidate-search-listbox"
+          aria-autocomplete="list"
           className="h-10 border-[#dfe2ec] bg-white pl-9 text-sm"
         />
       </div>
-      <select
-        value={candidate.id}
-        onChange={(event) =>
-          window.location.assign(
-            '/?candidate=' + encodeURIComponent(event.target.value),
-          )
-        }
-        aria-label="Choose a candidate"
-        className="mt-2 h-10 w-full rounded-lg border border-[#dfe2ec] bg-white px-3 text-sm outline-none focus:border-[#7575cf] focus:ring-2 focus:ring-[#7575cf]/20"
-      >
-        {!selectedIsVisible && (
-          <option value={candidate.id}>
-            {candidate.name} · {candidate.id}
-          </option>
-        )}
-        {matches.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name} · {item.id}
-          </option>
-        ))}
-      </select>
-      {normalizedQuery && matches.length === 0 && (
-        <p className="mt-1.5 text-xs text-[#85899b]">
-          No candidate matches that name or serial number.
-        </p>
+      {open && (
+        <ul
+          id="candidate-search-listbox"
+          role="listbox"
+          aria-label="Candidates"
+          className="absolute z-20 mt-1.5 max-h-64 w-full overflow-y-auto rounded-lg border border-[#dfe2ec] bg-white py-1 shadow-lg"
+        >
+          {matches.length ? (
+            matches.map((item, index) => (
+              <li key={item.id} role="option" aria-selected={item.id === candidate.id}>
+                <button
+                  type="button"
+                  onMouseEnter={() => setHighlighted(index)}
+                  onClick={() => selectCandidate(item.id)}
+                  className={
+                    'flex w-full items-center justify-between px-3 py-2 text-left text-sm ' +
+                    (index === highlighted
+                      ? 'bg-[#f1f1fb] text-[#3f3f91]'
+                      : 'text-[#31323d]') +
+                    (item.id === candidate.id ? ' font-medium' : '')
+                  }
+                >
+                  <span>
+                    {item.name} · {item.id}
+                  </span>
+                  {item.id === candidate.id && (
+                    <Icon
+                      icon={CheckmarkCircle02Icon}
+                      size={14}
+                      className="text-[#3f3f91]"
+                    />
+                  )}
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="px-3 py-2 text-xs text-[#85899b]">
+              No candidate matches that name or serial number.
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );
