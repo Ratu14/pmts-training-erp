@@ -44,3 +44,10 @@ export const trainingSessions = sqliteTable(
     index('idx_training_sessions_date_slot').on(table.sessionDate, table.timeSlot),
   ],
 );
+
+export const adminLoginAttempts = sqliteTable('admin_login_attempts', {
+  clientHash: text('client_hash').primaryKey(),
+  windowStarted: integer('window_started').notNull(),
+  failureCount: integer('failure_count').notNull(),
+  blockedUntil: integer('blocked_until').notNull(),
+});

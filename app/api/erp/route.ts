@@ -1,5 +1,4 @@
 import { getD1 } from '@/db';
-import { AccessError, requireAuthenticated } from '@/lib/access';
 
 const sessionStatuses = new Set(['Completed', 'Scheduled', 'No-show', 'Cancelled']);
 const defaultTrainers = [
@@ -35,9 +34,8 @@ async function ensureDefaultTrainers(db: ReturnType<typeof getD1>) {
   ).bind(item.id, item.name, createdAt)));
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    await requireAuthenticated(request);
     const db = getD1();
     await ensureDefaultTrainers(db);
     const [settings, candidates, sessions, trainers] = await db.batch([
@@ -68,16 +66,12 @@ export async function GET(request: Request) {
       trainers: trainers.results,
     });
   } catch (error) {
-    if (error instanceof AccessError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
     return Response.json({ error: error instanceof Error ? error.message : 'Unable to load ERP data.' }, { status: 503 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    await requireAuthenticated(request);
     const payload = (await request.json()) as Record<string, unknown>;
     const db = getD1();
     const timestamp = new Date().toISOString();
@@ -125,9 +119,6 @@ export async function POST(request: Request) {
 
     return Response.json({ error: 'Unsupported ERP action.' }, { status: 400 });
   } catch (error) {
-    if (error instanceof AccessError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
     const message = error instanceof Error ? error.message : 'Unable to update ERP data.';
     const isDuplicateCandidate = /unique constraint failed: candidates\.id/i.test(message);
     return Response.json({ error: isDuplicateCandidate ? 'This candidate serial number is already in use for that year.' : message }, { status: 400 });

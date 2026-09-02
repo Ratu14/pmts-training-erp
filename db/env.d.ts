@@ -1,8 +1,7 @@
 declare namespace Cloudflare {
   interface Env {
-    ACCESS_AUD?: string;
-    ACCESS_TEAM_DOMAIN?: string;
-    ADMIN_EMAILS?: string;
+    ADMIN_PASSWORD?: string;
+    ADMIN_SESSION_SECRET?: string;
     DB: D1Database;
   }
 }

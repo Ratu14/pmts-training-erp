@@ -1,9 +1,20 @@
 import { getD1 } from '@/db';
-import { AccessError, requireAdmin } from '@/lib/access';
+import {
+  adminResponseHeaders,
+  isAdminRequest,
+  isSameOriginRequest,
+} from '@/lib/admin';
+
+function json(payload: unknown, status = 200) {
+  return Response.json(payload, { status, headers: adminResponseHeaders() });
+}
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request) || !(await isAdminRequest(request))) {
+    return json({ error: 'Not found' }, 404);
+  }
+
   try {
-    await requireAdmin(request);
     const payload = (await request.json()) as Record<string, unknown>;
 
     if (payload.action === 'settings') {
@@ -18,17 +29,14 @@ export async function POST(request: Request) {
         )
         .bind('primary', target, new Date().toISOString())
         .run();
-      return Response.json({ ok: true });
+      return json({ ok: true });
     }
 
-    return Response.json({ error: 'Unsupported administrator action.' }, { status: 400 });
+    return json({ error: 'Unsupported administrator action.' }, 400);
   } catch (error) {
-    if (error instanceof AccessError) {
-      return Response.json({ error: error.message }, { status: error.status });
-    }
-    return Response.json(
+    return json(
       { error: error instanceof Error ? error.message : 'Unable to save administrator changes.' },
-      { status: 400 },
+      400,
     );
   }
 }

@@ -74,16 +74,10 @@ type ApiPayload = {
   trainers?: unknown;
   error?: unknown;
 };
-type AccessState = {
-  configured: boolean;
-  email: string | null;
-  role: 'admin' | 'general';
-};
-type AccessPayload = {
+type AdminSessionPayload = {
+  authenticated?: unknown;
   configured?: unknown;
-  email?: unknown;
   error?: unknown;
-  role?: unknown;
 };
 
 const STATUSES: Status[] = ['Scheduled', 'Completed', 'No-show', 'Cancelled'];
@@ -186,11 +180,8 @@ export function TrainingERP() {
   const pathname = usePathname() ?? '/';
   const searchParams = useSearchParams();
   const page = navItems.find((item) => item.href === pathname) ?? navItems[0];
-  const [access, setAccess] = useState<AccessState>({
-    configured: false,
-    email: null,
-    role: 'general',
-  });
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminConfigured, setAdminConfigured] = useState(false);
   const [target, setTarget] = useState(15);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -198,12 +189,16 @@ export function TrainingERP() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminSaving, setAdminSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [candidateSerial, setCandidateSerial] = useState('');
   const [enrollmentDate, setEnrollmentDate] = useState(today());
-  const isAdmin = access.role === 'admin';
+  const isAdmin = adminAuthenticated;
   const visibleNavItems = isAdmin
     ? navItems
     : navItems.filter((item) => item.href !== '/settings');
@@ -212,23 +207,17 @@ export function TrainingERP() {
     let mounted = true;
     void (async () => {
       try {
-        const accessResponse = await fetch('/api/access', { cache: 'no-store' });
-        const accessPayload = (await accessResponse.json().catch(() => ({}))) as AccessPayload;
-        if (!accessResponse.ok) {
-          throw new Error(
-            typeof accessPayload.error === 'string'
-              ? accessPayload.error
-              : 'Unable to confirm your ERP access.',
-          );
+        const [sessionResponse, response] = await Promise.all([
+          fetch('/api/admin/session', { cache: 'no-store' }),
+          fetch('/api/erp', { cache: 'no-store' }),
+        ]);
+        const sessionPayload = (await sessionResponse
+          .json()
+          .catch(() => ({}))) as AdminSessionPayload;
+        if (mounted && sessionResponse.ok) {
+          setAdminAuthenticated(sessionPayload.authenticated === true);
+          setAdminConfigured(sessionPayload.configured === true);
         }
-        if (!mounted) return;
-        setAccess({
-          configured: accessPayload.configured === true,
-          email: typeof accessPayload.email === 'string' ? accessPayload.email : null,
-          role: accessPayload.role === 'admin' ? 'admin' : 'general',
-        });
-
-        const response = await fetch('/api/erp', { cache: 'no-store' });
         const payload = (await response.json().catch(() => ({}))) as ApiPayload;
         if (!response.ok)
           throw new Error(
@@ -503,6 +492,53 @@ export function TrainingERP() {
     }
   }
 
+  async function submitAdminSignIn(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setAdminSaving(true);
+    setAdminError(null);
+    try {
+      const response = await fetch('/api/admin/session', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          website: String(form.get('website') ?? ''),
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: unknown;
+      };
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === 'string'
+            ? payload.error
+            : 'Unable to sign in.',
+        );
+      }
+      setAdminAuthenticated(true);
+      setAdminConfigured(true);
+      setAdminPassword('');
+      setAdminOpen(false);
+    } catch (error) {
+      setAdminError(
+        error instanceof Error ? error.message : 'Unable to sign in.',
+      );
+    } finally {
+      setAdminSaving(false);
+    }
+  }
+
+  async function signOutAdmin() {
+    try {
+      await fetch('/api/admin/session', { method: 'DELETE' });
+    } finally {
+      setAdminAuthenticated(false);
+      setAdminPassword('');
+      if (pathname === '/settings') window.location.assign('/');
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f7f8fc] text-[#151724]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[246px] flex-col border-r border-[#e5e7f0] bg-white px-4 py-5 lg:flex">
@@ -586,10 +622,25 @@ export function TrainingERP() {
                   ? 'bg-[#ececff] text-[#363681]'
                   : 'bg-white text-[#686c80]')
               }
-              title={access.email ?? undefined}
             >
               {isAdmin ? 'Admin access' : 'General access'}
             </Badge>
+            {isAdmin ? (
+              <Button variant="outline" size="sm" onClick={() => void signOutAdmin()}>
+                Sign out
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setAdminError(null);
+                  setAdminOpen(true);
+                }}
+              >
+                Admin sign in
+              </Button>
+            )}
             <a
               href="/training-log"
               className="hidden h-7 items-center gap-1 rounded-lg border border-[#e5e7f0] bg-white px-2.5 text-[0.8rem] font-medium hover:bg-[#f3f4f8] sm:inline-flex"
@@ -693,7 +744,13 @@ export function TrainingERP() {
                 onSave={saveTarget}
               />
             ) : (
-              <SettingsRestricted configured={access.configured} />
+              <SettingsRestricted
+                configured={adminConfigured}
+                onSignIn={() => {
+                  setAdminError(null);
+                  setAdminOpen(true);
+                }}
+              />
             ))}
         </div>
       </main>
@@ -774,6 +831,61 @@ export function TrainingERP() {
                   <Button type="submit" disabled={saving}>
                     <Icon icon={UserAdd02Icon} />{' '}
                     {saving ? 'Saving…' : 'Create learner'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {adminOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md bg-white shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-lg">Administrator sign in</CardTitle>
+              <CardDescription>
+                Enter the administrator password to unlock Settings for this browser for 30 minutes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={submitAdminSignIn}>
+                <input
+                  aria-hidden="true"
+                  autoComplete="off"
+                  className="absolute -left-[9999px] size-px"
+                  name="website"
+                  tabIndex={-1}
+                />
+                <label className="block text-sm font-medium">
+                  Administrator password
+                  <Input
+                    autoFocus
+                    required
+                    type="password"
+                    value={adminPassword}
+                    onChange={(event) => setAdminPassword(event.target.value)}
+                    autoComplete="current-password"
+                    className="mt-1.5"
+                  />
+                </label>
+                {adminError && (
+                  <p className="text-sm text-[#9b3039]">{adminError}</p>
+                )}
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setAdminOpen(false);
+                      setAdminPassword('');
+                      setAdminError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={adminSaving}>
+                    {adminSaving ? 'Signing in…' : 'Sign in'}
                   </Button>
                 </div>
               </form>
@@ -1559,7 +1671,13 @@ function Reports({
   );
 }
 
-function SettingsRestricted({ configured }: { configured: boolean }) {
+function SettingsRestricted({
+  configured,
+  onSignIn,
+}: {
+  configured: boolean;
+  onSignIn: () => void;
+}) {
   return (
     <Card className="border border-dashed border-[#cfd2e4] bg-white">
       <CardContent className="flex min-h-80 flex-col items-center justify-center text-center">
@@ -1577,12 +1695,15 @@ function SettingsRestricted({ configured }: { configured: boolean }) {
         </p>
         {!configured && (
           <p className="mt-3 max-w-md text-xs leading-5 text-[#9b3039]">
-            Secure access is still being configured for this ERP.
+            Administrator sign-in has not been configured for this ERP yet.
           </p>
         )}
+        <Button className="mt-6" onClick={onSignIn}>
+          Administrator sign in
+        </Button>
         <a
           href="/"
-          className="mt-6 text-sm font-medium text-[#4b4b9d] underline underline-offset-4"
+          className="mt-4 text-sm font-medium text-[#4b4b9d] underline underline-offset-4"
         >
           Return to dashboard
         </a>
