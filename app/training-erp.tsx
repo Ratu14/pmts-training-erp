@@ -37,6 +37,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
   Progress,
   ProgressLabel,
   ProgressValue,
@@ -108,13 +117,30 @@ type AdminDataPayload = {
 
 const STATUSES: Status[] = ['Scheduled', 'Completed', 'No-show', 'Cancelled'];
 const navItems = [
-  { label: 'Candidate dashboard', href: '/', icon: DashboardSquare01Icon },
-  { label: 'Candidates', href: '/candidates', icon: UserMultipleIcon },
-  { label: 'Training log', href: '/training-log', icon: Calendar01Icon },
-  { label: 'Reports', href: '/reports', icon: Analytics02Icon },
-  { label: 'Settings', href: '/settings', icon: Settings01Icon },
-  { label: 'Admin records', href: '/admin', icon: Database01Icon },
+  {
+    label: 'Candidate dashboard',
+    short: 'Dashboard',
+    href: '/',
+    icon: DashboardSquare01Icon,
+  },
+  {
+    label: 'Candidates',
+    short: 'Learners',
+    href: '/candidates',
+    icon: UserMultipleIcon,
+  },
+  {
+    label: 'Training log',
+    short: 'Log',
+    href: '/training-log',
+    icon: Calendar01Icon,
+  },
+  { label: 'Reports', short: 'Reports', href: '/reports', icon: Analytics02Icon },
+  { label: 'Settings', short: 'Settings', href: '/settings', icon: Settings01Icon },
+  { label: 'Admin records', short: 'Admin', href: '/admin', icon: Database01Icon },
 ];
+/** Destinations shown as thumb-reachable tabs on phones; the rest live in "More". */
+const MOBILE_TAB_COUNT = 4;
 const ADMIN_ONLY_HREFS = new Set(['/settings', '/admin']);
 
 function Icon({
@@ -237,6 +263,8 @@ export function TrainingERP() {
   const visibleNavItems = isAdmin
     ? navItems
     : navItems.filter((item) => !ADMIN_ONLY_HREFS.has(item.href));
+  const mobileTabs = visibleNavItems.slice(0, MOBILE_TAB_COUNT);
+  const overflowNavItems = visibleNavItems.slice(MOBILE_TAB_COUNT);
 
   useEffect(() => {
     let mounted = true;
@@ -829,31 +857,21 @@ export function TrainingERP() {
       </aside>
 
       <main className="lg:pl-[246px]">
-        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border/90 bg-background/90 px-5 backdrop-blur-lg sm:px-8">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="lg:hidden"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-label="Toggle navigation"
-            >
-              <Icon icon={Menu05Icon} />
-            </Button>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                Training ERP
-              </p>
-              <h1 className="text-lg font-semibold tracking-[-0.03em]">
-                {page.label}
-              </h1>
-            </div>
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border/90 bg-background/90 px-5 backdrop-blur-lg sm:h-[72px] sm:px-8">
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              Training ERP
+            </p>
+            <h1 className="truncate text-lg font-semibold tracking-[-0.03em]">
+              {page.label}
+            </h1>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            {/* Access state and secondary actions live in the "More" sheet on phones. */}
             <Badge
               variant="outline"
               className={
-                'hidden h-7 border-input px-2.5 text-[10px] uppercase tracking-[0.12em] sm:inline-flex ' +
+                'hidden h-7 border-input px-2.5 text-[10px] uppercase tracking-[0.12em] lg:inline-flex ' +
                 (isAdmin
                   ? 'bg-accent text-accent-foreground'
                   : 'bg-card text-muted-foreground')
@@ -862,13 +880,19 @@ export function TrainingERP() {
               {isAdmin ? 'Admin access' : 'General access'}
             </Badge>
             {isAdmin ? (
-              <Button variant="outline" size="sm" onClick={() => void signOutAdmin()}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden lg:inline-flex"
+                onClick={() => void signOutAdmin()}
+              >
                 Sign out
               </Button>
             ) : (
               <Button
                 variant="outline"
                 size="sm"
+                className="hidden lg:inline-flex"
                 onClick={() => {
                   setAdminError(null);
                   setAdminOpen(true);
@@ -879,43 +903,22 @@ export function TrainingERP() {
             )}
             <a
               href="/training-log"
-              className="hidden h-7 items-center gap-1 rounded-lg border border-border bg-card px-2.5 text-[0.8rem] font-medium hover:bg-muted sm:inline-flex"
+              className="hidden h-7 items-center gap-1 rounded-lg border border-border bg-card px-2.5 text-[0.8rem] font-medium transition-colors hover:bg-muted lg:inline-flex"
             >
               <Icon icon={CalendarPlus01Icon} /> Log session
             </a>
-            <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Button
+              size="sm"
+              className="h-10 px-3.5 sm:h-7 sm:px-2.5"
+              onClick={() => setAddOpen(true)}
+            >
               <Icon icon={PlusSignIcon} /> Add learner
             </Button>
           </div>
         </header>
 
-        {menuOpen && (
-          <nav
-            className="border-b border-border bg-card px-4 py-3 lg:hidden"
-            aria-label="Mobile navigation"
-          >
-            <div className="grid grid-cols-2 gap-1">
-              {visibleNavItems.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMenuOpen(false)}
-                  className={
-                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm ' +
-                    (page.href === item.href
-                      ? 'bg-accent text-accent-foreground'
-                      : 'text-muted-foreground')
-                  }
-                >
-                  <Icon icon={item.icon} size={16} />
-                  {item.label}
-                </a>
-              ))}
-            </div>
-          </nav>
-        )}
-
-        <div className="mx-auto max-w-[1500px] px-5 py-7 sm:px-8 lg:px-10">
+        {/* pb clears the fixed mobile tab bar; restored to normal at lg where the sidebar takes over. */}
+        <div className="mx-auto max-w-[1500px] px-5 pt-6 pb-28 sm:px-8 sm:pt-7 lg:px-10 lg:pb-7">
           {message && (
             <div
               role="status"
@@ -925,13 +928,41 @@ export function TrainingERP() {
             </div>
           )}
           {!loaded && (
-            <Card>
-              <CardContent className="py-14 text-center">
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                  Loading PMTS records
-                </p>
-              </CardContent>
-            </Card>
+            <div aria-busy="true" aria-live="polite">
+              <span className="sr-only">Loading PMTS records</span>
+              <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[0, 1, 2, 3].map((tile) => (
+                  <Card key={tile}>
+                    <CardContent className="space-y-3">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-7 w-20" />
+                      <Skeleton className="h-3 w-32" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </section>
+              <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.22fr)_minmax(320px,.78fr)]">
+                <Card>
+                  <CardContent className="space-y-4">
+                    <Skeleton className="h-3 w-28" />
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-2 w-full" />
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <Skeleton className="h-16" />
+                      <Skeleton className="h-16" />
+                      <Skeleton className="h-16" />
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="space-y-4">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-8 w-40" />
+                    <Skeleton className="h-3 w-36" />
+                  </CardContent>
+                </Card>
+              </section>
+            </div>
           )}
           {loaded && page.href === '/' && (
             <Dashboard
@@ -1023,6 +1054,129 @@ export function TrainingERP() {
         </div>
       </main>
 
+      {/* Thumb-reachable primary navigation for phones and small tablets. */}
+      <nav
+        aria-label="Primary"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg lg:hidden"
+      >
+        <div className="mx-auto grid max-w-lg grid-cols-5">
+          {mobileTabs.map((item) => {
+            const active = page.href === item.href;
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                aria-current={active ? 'page' : undefined}
+                className={
+                  'flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium transition-colors ' +
+                  (active ? 'text-accent-foreground' : 'text-muted-foreground')
+                }
+              >
+                <span
+                  className={
+                    'grid h-7 w-12 place-items-center rounded-full transition-colors duration-200 ' +
+                    (active ? 'bg-accent' : 'bg-transparent')
+                  }
+                >
+                  <Icon icon={item.icon} size={18} />
+                </span>
+                <span className="max-w-full truncate">{item.short}</span>
+              </a>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="More options"
+            className={
+              'flex min-h-[56px] flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium transition-colors ' +
+              (overflowNavItems.some((item) => item.href === page.href)
+                ? 'text-accent-foreground'
+                : 'text-muted-foreground')
+            }
+          >
+            <span
+              className={
+                'grid h-7 w-12 place-items-center rounded-full transition-colors duration-200 ' +
+                (overflowNavItems.some((item) => item.href === page.href)
+                  ? 'bg-accent'
+                  : 'bg-transparent')
+              }
+            >
+              <Icon icon={Menu05Icon} size={18} />
+            </span>
+            <span>More</span>
+          </button>
+        </div>
+      </nav>
+
+      <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] lg:hidden"
+        >
+          <SheetHeader>
+            <SheetTitle>More</SheetTitle>
+            <SheetDescription>
+              {isAdmin
+                ? 'You have administrator access on this browser.'
+                : 'General access. Sign in as administrator to manage settings.'}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-1 px-4">
+            {overflowNavItems.map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setMenuOpen(false)}
+                className={
+                  'flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm transition-colors ' +
+                  (page.href === item.href
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-foreground hover:bg-muted')
+                }
+              >
+                <Icon icon={item.icon} size={18} />
+                {item.label}
+              </a>
+            ))}
+            <a
+              href="/training-log"
+              onClick={() => setMenuOpen(false)}
+              className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-sm transition-colors hover:bg-muted"
+            >
+              <Icon icon={CalendarPlus01Icon} size={18} /> Log a session
+            </a>
+          </div>
+          <SheetFooter>
+            {isAdmin ? (
+              <Button
+                variant="outline"
+                className="h-11 w-full"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void signOutAdmin();
+                }}
+              >
+                Sign out of admin
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="h-11 w-full"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setAdminError(null);
+                  setAdminOpen(true);
+                }}
+              >
+                Admin sign in
+              </Button>
+            )}
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1082,7 +1236,7 @@ export function TrainingERP() {
                 {candidateCode(candidateSerial, enrollmentDate)}
               </p>
             </div>
-            <DialogFooter>
+            <DialogFooter className="[&_button]:h-11 sm:[&_button]:h-8">
               <Button
                 type="button"
                 variant="outline"
@@ -1142,7 +1296,7 @@ export function TrainingERP() {
             {adminError && (
               <p className="text-sm text-destructive">{adminError}</p>
             )}
-            <DialogFooter>
+            <DialogFooter className="[&_button]:h-11 sm:[&_button]:h-8">
               <Button
                 type="button"
                 variant="outline"
@@ -1219,7 +1373,7 @@ export function TrainingERP() {
                   className="mt-1.5"
                 />
               </label>
-              <DialogFooter>
+              <DialogFooter className="[&_button]:h-11 sm:[&_button]:h-8">
                 <Button
                   type="button"
                   variant="outline"
@@ -1252,7 +1406,7 @@ export function TrainingERP() {
                 This cannot be undone.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter>
+            <DialogFooter className="[&_button]:h-11 sm:[&_button]:h-8">
               <Button
                 type="button"
                 variant="outline"
@@ -1588,7 +1742,7 @@ function Dashboard({
                 </p>
                 <a
                   href="/training-log"
-                  className="mt-6 inline-flex text-sm font-medium text-primary-foreground underline underline-offset-4"
+                  className="mt-5 inline-flex min-h-11 items-center rounded-lg bg-primary-foreground/10 px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-foreground/20 sm:mt-6 sm:min-h-0 sm:bg-transparent sm:px-0 sm:underline sm:underline-offset-4 sm:hover:bg-transparent"
                 >
                   Open training log
                 </a>
@@ -1608,7 +1762,7 @@ function Dashboard({
             </div>
             <a
               href="/training-log"
-              className="text-sm font-medium text-accent-foreground hover:text-primary"
+              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-muted sm:min-h-0 sm:px-0 sm:hover:bg-transparent sm:hover:text-primary"
             >
               Open full log
             </a>
@@ -1747,46 +1901,29 @@ function Candidates({
         </CardHeader>
         <CardContent>
           {filtered.length ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Learner</TableHead>
-                  <TableHead>Candidate ID</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Enrollment
-                  </TableHead>
-                  <TableHead className="hidden lg:table-cell">
-                    Contact
-                  </TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead className="text-right">Remaining</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Phones read one card per learner; the table returns at md. */}
+              <ul className="grid gap-3 md:hidden">
                 {filtered.map((candidate) => (
-                  <TableRow key={candidate.id}>
-                    <TableCell>
-                      <a
-                        href={'/?candidate=' + encodeURIComponent(candidate.id)}
-                        className="block hover:text-accent-foreground"
-                      >
-                        <p className="font-medium">{candidate.name}</p>
-                        <p className="font-mono text-[10px] text-muted-foreground">
-                          Record
-                        </p>
-                      </a>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-accent-foreground">
-                      {candidate.id}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {candidate.enrolled}
-                    </TableCell>
-                    <TableCell className="hidden font-mono text-xs text-muted-foreground lg:table-cell">
-                      {candidate.phone}
-                    </TableCell>
-                    <TableCell className="min-w-[150px]">
-                      <div className="flex items-center gap-3">
+                  <li key={candidate.id}>
+                    <a
+                      href={'/?candidate=' + encodeURIComponent(candidate.id)}
+                      className="block rounded-xl border border-border p-4 transition-colors active:bg-muted"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">
+                            {candidate.name}
+                          </p>
+                          <p className="mt-0.5 font-mono text-xs text-accent-foreground">
+                            {candidate.id}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0">
+                          {candidate.remaining} left
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex items-center gap-3">
                         <Progress
                           value={candidate.percentage}
                           className="flex-1"
@@ -1796,18 +1933,90 @@ function Candidates({
                           </ProgressLabel>
                           <ProgressValue className="sr-only" />
                         </Progress>
-                        <span className="font-mono text-[11px] text-accent-foreground">
+                        <span className="shrink-0 font-mono text-[11px] text-accent-foreground">
                           {candidate.complete}/{target}
                         </span>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-accent-foreground">
-                      {candidate.remaining}
-                    </TableCell>
-                  </TableRow>
+                      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                        <div>
+                          <dt className="text-muted-foreground">Enrolled</dt>
+                          <dd className="mt-0.5">{candidate.enrolled}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Contact</dt>
+                          <dd className="mt-0.5 truncate font-mono">
+                            {candidate.phone}
+                          </dd>
+                        </div>
+                      </dl>
+                    </a>
+                  </li>
                 ))}
-              </TableBody>
-            </Table>
+              </ul>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Learner</TableHead>
+                      <TableHead>Candidate ID</TableHead>
+                      <TableHead>Enrollment</TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Contact
+                      </TableHead>
+                      <TableHead>Progress</TableHead>
+                      <TableHead className="text-right">Remaining</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((candidate) => (
+                      <TableRow key={candidate.id}>
+                        <TableCell>
+                          <a
+                            href={
+                              '/?candidate=' + encodeURIComponent(candidate.id)
+                            }
+                            className="block hover:text-accent-foreground"
+                          >
+                            <p className="font-medium">{candidate.name}</p>
+                            <p className="font-mono text-[10px] text-muted-foreground">
+                              Record
+                            </p>
+                          </a>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-accent-foreground">
+                          {candidate.id}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {candidate.enrolled}
+                        </TableCell>
+                        <TableCell className="hidden font-mono text-xs text-muted-foreground lg:table-cell">
+                          {candidate.phone}
+                        </TableCell>
+                        <TableCell className="min-w-[150px]">
+                          <div className="flex items-center gap-3">
+                            <Progress
+                              value={candidate.percentage}
+                              className="flex-1"
+                            >
+                              <ProgressLabel className="sr-only">
+                                {candidate.name} completion
+                              </ProgressLabel>
+                              <ProgressValue className="sr-only" />
+                            </Progress>
+                            <span className="font-mono text-[11px] text-accent-foreground">
+                              {candidate.complete}/{target}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-xs text-accent-foreground">
+                          {candidate.remaining}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           ) : (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No learners yet. Add the first learner to create a D1 record.
@@ -1923,7 +2132,7 @@ function TrainingLog({
                   required
                   value={candidateId}
                   onChange={(event) => setCandidateId(event.target.value)}
-                  className="mt-1.5 h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-input bg-card px-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20 sm:h-9"
                 >
                   <option value="">Select learner</option>
                   {candidates.map((candidate) => (
@@ -1959,7 +2168,7 @@ function TrainingLog({
                   required
                   value={trainerId}
                   onChange={(event) => setTrainerId(event.target.value)}
-                  className="mt-1.5 h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-input bg-card px-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20 sm:h-9"
                   disabled={!trainers.length}
                 >
                   <option value="">
@@ -1977,7 +2186,7 @@ function TrainingLog({
                 <select
                   value={status}
                   onChange={(event) => setStatus(asStatus(event.target.value))}
-                  className="mt-1.5 h-9 w-full rounded-lg border border-input bg-card px-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-input bg-card px-2.5 text-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20 sm:h-9"
                 >
                   {STATUSES.map((item) => (
                     <option key={item}>{item}</option>
@@ -2020,15 +2229,83 @@ function TrainingLog({
         </CardHeader>
         <CardContent>
           {sessions.length ? (
+            <>
+              {/* Phones read one card per session; the table returns at md. */}
+              <ul className="grid gap-3 md:hidden">
+                {sessions.map((session) => (
+                  <li
+                    key={session.id}
+                    className="rounded-xl border border-border p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <a
+                        href={
+                          '/?candidate=' +
+                          encodeURIComponent(session.candidateId)
+                        }
+                        className="min-w-0"
+                      >
+                        <p className="truncate font-medium">
+                          {session.candidateName}
+                        </p>
+                        <p className="mt-0.5 font-mono text-xs text-accent-foreground">
+                          {session.candidateId}
+                        </p>
+                      </a>
+                      <Badge
+                        className={statusStyle(session.status) + ' shrink-0 ring-1'}
+                      >
+                        {session.status}
+                      </Badge>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Date</dt>
+                        <dd className="mt-0.5">{session.date}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Time</dt>
+                        <dd className="mt-0.5 font-mono text-accent-foreground">
+                          {session.slot}
+                        </dd>
+                      </div>
+                      <div className="col-span-2">
+                        <dt className="text-muted-foreground">Trainer</dt>
+                        <dd className="mt-0.5 truncate">{session.trainer}</dd>
+                      </div>
+                    </dl>
+                    <label className="mt-3 block text-xs font-medium text-muted-foreground">
+                      Update outcome
+                      <select
+                        aria-label={'Update status for ' + session.candidateName}
+                        value={session.status}
+                        disabled={saving}
+                        onChange={(event) =>
+                          void onUpdateStatus(
+                            session.id,
+                            asStatus(event.target.value),
+                          )
+                        }
+                        className="mt-1 h-11 w-full rounded-lg border border-input bg-card px-2.5 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:opacity-50"
+                      >
+                        {STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Time</TableHead>
                   <TableHead>Learner</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Trainer
-                  </TableHead>
+                  <TableHead>Trainer</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -2055,7 +2332,7 @@ function TrainingLog({
                         </p>
                       </a>
                     </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                    <TableCell className="text-muted-foreground">
                       {session.trainer}
                     </TableCell>
                     <TableCell>
@@ -2091,6 +2368,8 @@ function TrainingLog({
                 ))}
               </TableBody>
             </Table>
+              </div>
+            </>
           ) : (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No sessions have been logged yet.
@@ -2185,12 +2464,12 @@ function SettingsRestricted({
             Administrator sign-in has not been configured for this ERP yet.
           </p>
         )}
-        <Button className="mt-6" onClick={onSignIn}>
+        <Button className="mt-6 h-11 px-5 sm:h-8 sm:px-2.5" onClick={onSignIn}>
           Administrator sign in
         </Button>
         <a
           href="/"
-          className="mt-4 text-sm font-medium text-accent-foreground underline underline-offset-4"
+          className="mt-3 inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-accent-foreground transition-colors hover:bg-muted sm:mt-4 sm:min-h-0 sm:px-0 sm:underline sm:underline-offset-4 sm:hover:bg-transparent"
         >
           Return to dashboard
         </a>
@@ -2297,7 +2576,7 @@ function Settings({
                 value={newTrainerName}
                 onChange={(event) => setNewTrainerName(event.target.value)}
                 placeholder="e.g. A. Kapoor"
-                className="h-9 text-sm"
+                className="h-11 text-sm sm:h-9"
                 disabled={busy}
               />
               <Button
@@ -2435,7 +2714,7 @@ function Settings({
                 type="time"
                 value={newSlot}
                 onChange={(event) => setNewSlot(event.target.value)}
-                className="h-9 text-sm"
+                className="h-11 text-sm sm:h-9"
                 disabled={busy}
               />
               <Button type="submit" size="sm" disabled={busy || !newSlot}>
@@ -2531,14 +2810,83 @@ function AdminCandidates({
         </CardHeader>
         <CardContent>
           {candidates.length ? (
+            <>
+              {/* Phones read one card per record; the table returns at md. */}
+              <ul className="grid gap-3 md:hidden">
+                {candidates.map((candidate) => (
+                  <li
+                    key={candidate.id}
+                    className="rounded-xl border border-border p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{candidate.name}</p>
+                        <p className="mt-0.5 font-mono text-xs text-accent-foreground">
+                          {candidate.id}
+                        </p>
+                      </div>
+                      <Badge
+                        className={
+                          (candidate.isActive
+                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                            : 'bg-zinc-100 text-zinc-600 ring-zinc-200') +
+                          ' shrink-0 ring-1'
+                        }
+                      >
+                        {candidate.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Enrolled</dt>
+                        <dd className="mt-0.5">{candidate.enrolledAt}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Contact</dt>
+                        <dd className="mt-0.5 truncate font-mono">
+                          {candidate.phone || '—'}
+                        </dd>
+                      </div>
+                    </dl>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        disabled={busy}
+                        onClick={() => onEdit(candidate)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        disabled={busy}
+                        onClick={() => onToggleActive(candidate)}
+                      >
+                        {candidate.isActive ? 'Deactivate' : 'Reactivate'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="col-span-2 h-11"
+                        disabled={busy}
+                        onClick={() => onDelete(candidate)}
+                      >
+                        Delete permanently
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Learner</TableHead>
                   <TableHead>Candidate ID</TableHead>
-                  <TableHead className="hidden md:table-cell">
-                    Enrollment
-                  </TableHead>
+                  <TableHead>Enrollment</TableHead>
                   <TableHead className="hidden lg:table-cell">
                     Contact
                   </TableHead>
@@ -2555,9 +2903,7 @@ function AdminCandidates({
                     <TableCell className="font-mono text-xs">
                       {candidate.id}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {candidate.enrolledAt}
-                    </TableCell>
+                    <TableCell>{candidate.enrolledAt}</TableCell>
                     <TableCell className="hidden font-mono text-xs lg:table-cell">
                       {candidate.phone || '—'}
                     </TableCell>
@@ -2608,6 +2954,8 @@ function AdminCandidates({
                 ))}
               </TableBody>
             </Table>
+              </div>
+            </>
           ) : (
             <p className="py-10 text-center text-sm text-muted-foreground">
               No candidate records yet.
