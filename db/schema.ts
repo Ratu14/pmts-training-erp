@@ -3,6 +3,7 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 export const settings = sqliteTable('settings', {
   id: text('id').primaryKey(),
   trainingTarget: integer('training_target').notNull().default(15),
+  timeSlots: text('time_slots'),
   updatedAt: text('updated_at').notNull(),
 });
 

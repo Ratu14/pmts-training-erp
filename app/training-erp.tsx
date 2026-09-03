@@ -9,6 +9,7 @@ import {
   CalendarPlus01Icon,
   CheckmarkCircle02Icon,
   DashboardSquare01Icon,
+  Database01Icon,
   Menu05Icon,
   PlusSignIcon,
   Search02Icon,
@@ -50,7 +51,16 @@ type Candidate = {
   enrolled: string;
   phone: string;
 };
-type Trainer = { id: string; name: string };
+type Trainer = { id: string; name: string; isActive?: boolean };
+type AdminCandidateRecord = {
+  id: string;
+  serialNumber: number | null;
+  enrollmentYear: number | null;
+  name: string;
+  phone: string;
+  enrolledAt: string;
+  isActive: boolean;
+};
 type Session = {
   id: string;
   candidateId: string;
@@ -69,6 +79,7 @@ type ProgressCandidate = Candidate & {
 };
 type ApiPayload = {
   trainingTarget?: unknown;
+  timeSlots?: unknown;
   candidates?: unknown;
   sessions?: unknown;
   trainers?: unknown;
@@ -79,6 +90,13 @@ type AdminSessionPayload = {
   configured?: unknown;
   error?: unknown;
 };
+type AdminDataPayload = {
+  trainingTarget?: unknown;
+  timeSlots?: unknown;
+  trainers?: unknown;
+  candidates?: unknown;
+  error?: unknown;
+};
 
 const STATUSES: Status[] = ['Scheduled', 'Completed', 'No-show', 'Cancelled'];
 const navItems = [
@@ -87,7 +105,9 @@ const navItems = [
   { label: 'Training log', href: '/training-log', icon: Calendar01Icon },
   { label: 'Reports', href: '/reports', icon: Analytics02Icon },
   { label: 'Settings', href: '/settings', icon: Settings01Icon },
+  { label: 'Admin records', href: '/admin', icon: Database01Icon },
 ];
+const ADMIN_ONLY_HREFS = new Set(['/settings', '/admin']);
 
 function Icon({
   icon,
@@ -198,10 +218,16 @@ export function TrainingERP() {
   const [message, setMessage] = useState<string | null>(null);
   const [candidateSerial, setCandidateSerial] = useState('');
   const [enrollmentDate, setEnrollmentDate] = useState(today());
+  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [adminTrainers, setAdminTrainers] = useState<Trainer[]>([]);
+  const [adminCandidates, setAdminCandidates] = useState<AdminCandidateRecord[]>([]);
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [editingCandidate, setEditingCandidate] = useState<AdminCandidateRecord | null>(null);
+  const [deletingCandidate, setDeletingCandidate] = useState<AdminCandidateRecord | null>(null);
   const isAdmin = adminAuthenticated;
   const visibleNavItems = isAdmin
     ? navItems
-    : navItems.filter((item) => item.href !== '/settings');
+    : navItems.filter((item) => !ADMIN_ONLY_HREFS.has(item.href));
 
   useEffect(() => {
     let mounted = true;
@@ -228,6 +254,13 @@ export function TrainingERP() {
         if (!mounted) return;
         if (typeof payload.trainingTarget === 'number')
           setTarget(payload.trainingTarget);
+        if (Array.isArray(payload.timeSlots)) {
+          setTimeSlots(
+            payload.timeSlots.filter(
+              (slot): slot is string => typeof slot === 'string',
+            ),
+          );
+        }
         setCandidates(
           Array.isArray(payload.candidates)
             ? payload.candidates.map((item) => {
@@ -312,6 +345,103 @@ export function TrainingERP() {
       mounted = false;
     };
   }, []);
+
+  async function loadAdminRecords() {
+    try {
+      const response = await fetch('/api/admin', { cache: 'no-store' });
+      const payload = (await response
+        .json()
+        .catch(() => ({}))) as AdminDataPayload;
+      if (!response.ok)
+        throw new Error(
+          typeof payload.error === 'string'
+            ? payload.error
+            : 'Unable to load administrator records.',
+        );
+
+      const nextTimeSlots = Array.isArray(payload.timeSlots)
+        ? payload.timeSlots.filter(
+            (slot): slot is string => typeof slot === 'string',
+          )
+        : [];
+      const nextTrainers: Trainer[] = Array.isArray(payload.trainers)
+        ? payload.trainers.map((item) => {
+            const row = item as {
+              id?: unknown;
+              name?: unknown;
+              isActive?: unknown;
+            };
+            return {
+              id: String(row.id ?? ''),
+              name: String(row.name ?? ''),
+              isActive: Boolean(row.isActive),
+            };
+          })
+        : [];
+      const nextCandidates: AdminCandidateRecord[] = Array.isArray(
+        payload.candidates,
+      )
+        ? payload.candidates.map((item) => {
+            const row = item as {
+              id?: unknown;
+              serialNumber?: unknown;
+              enrollmentYear?: unknown;
+              name?: unknown;
+              phone?: unknown;
+              enrolledAt?: unknown;
+              isActive?: unknown;
+            };
+            return {
+              id: String(row.id ?? ''),
+              serialNumber:
+                typeof row.serialNumber === 'number' ? row.serialNumber : null,
+              enrollmentYear:
+                typeof row.enrollmentYear === 'number'
+                  ? row.enrollmentYear
+                  : null,
+              name: String(row.name ?? ''),
+              phone: typeof row.phone === 'string' ? row.phone : '',
+              enrolledAt: String(row.enrolledAt ?? ''),
+              isActive: Boolean(row.isActive),
+            };
+          })
+        : [];
+
+      setTimeSlots(nextTimeSlots);
+      setAdminTrainers(nextTrainers);
+      setAdminCandidates(nextCandidates);
+      setTrainers(
+        nextTrainers
+          .filter((trainer) => trainer.isActive)
+          .map(({ id, name }) => ({ id, name })),
+      );
+      setCandidates(
+        nextCandidates
+          .filter((candidate) => candidate.isActive)
+          .map((candidate) => ({
+            id: candidate.id,
+            serialNumber: candidate.serialNumber,
+            enrollmentYear: candidate.enrollmentYear,
+            name: candidate.name,
+            phone: candidate.phone || '—',
+            enrolled: candidate.enrolledAt,
+          })),
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to load administrator records.',
+      );
+    }
+  }
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    if (pathname !== '/settings' && pathname !== '/admin') return;
+    void loadAdminRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, pathname]);
 
   const rows: ProgressCandidate[] = useMemo(() => {
     const completedByCandidate = sessions.reduce<Record<string, number>>(
@@ -489,6 +619,105 @@ export function TrainingERP() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveTimeSlots(nextSlots: string[]) {
+    setAdminBusy(true);
+    setMessage(null);
+    try {
+      await postAdmin({ action: 'time-slots', timeSlots: nextSlots });
+      await loadAdminRecords();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update time slots.',
+      );
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function createTrainer(name: string) {
+    setAdminBusy(true);
+    setMessage(null);
+    try {
+      await postAdmin({ action: 'trainer-create', name });
+      await loadAdminRecords();
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : 'Unable to add the trainer.',
+      );
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function updateTrainer(
+    id: string,
+    changes: { name?: string; isActive?: boolean },
+  ) {
+    setAdminBusy(true);
+    setMessage(null);
+    try {
+      await postAdmin({ action: 'trainer-update', id, ...changes });
+      await loadAdminRecords();
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update the trainer.',
+      );
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function updateCandidateAdmin(
+    id: string,
+    changes: {
+      name?: string;
+      phone?: string;
+      enrolledAt?: string;
+      isActive?: boolean;
+    },
+  ) {
+    setAdminBusy(true);
+    setMessage(null);
+    try {
+      await postAdmin({ action: 'candidate-update', id, ...changes });
+      await loadAdminRecords();
+      setEditingCandidate(null);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to update the candidate.',
+      );
+    } finally {
+      setAdminBusy(false);
+    }
+  }
+
+  async function deleteCandidateAdmin(id: string) {
+    setAdminBusy(true);
+    setMessage(null);
+    try {
+      await postAdmin({ action: 'candidate-delete', id });
+      await loadAdminRecords();
+      setSessions((current) =>
+        current.filter((session) => session.candidateId !== id),
+      );
+      setDeletingCandidate(null);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Unable to delete the candidate.',
+      );
+    } finally {
+      setAdminBusy(false);
     }
   }
 
@@ -738,14 +967,45 @@ export function TrainingERP() {
             (isAdmin ? (
               <Settings
                 target={target}
-                trainers={trainers}
+                trainers={adminTrainers}
+                timeSlots={timeSlots}
                 saving={saving}
+                busy={adminBusy}
                 onChange={setTarget}
                 onSave={saveTarget}
+                onCreateTrainer={createTrainer}
+                onUpdateTrainer={updateTrainer}
+                onSaveTimeSlots={saveTimeSlots}
               />
             ) : (
               <SettingsRestricted
                 configured={adminConfigured}
+                title="Settings are protected"
+                description="General users can work with candidate and training records, but only an administrator can view or change operational settings."
+                onSignIn={() => {
+                  setAdminError(null);
+                  setAdminOpen(true);
+                }}
+              />
+            ))}
+          {loaded && page.href === '/admin' &&
+            (isAdmin ? (
+              <AdminCandidates
+                candidates={adminCandidates}
+                busy={adminBusy}
+                onEdit={setEditingCandidate}
+                onToggleActive={(candidate) =>
+                  void updateCandidateAdmin(candidate.id, {
+                    isActive: !candidate.isActive,
+                  })
+                }
+                onDelete={setDeletingCandidate}
+              />
+            ) : (
+              <SettingsRestricted
+                configured={adminConfigured}
+                title="Candidate records are protected"
+                description="General users can work with candidate and training records, but only an administrator can view, edit, or delete the full candidate register."
                 onSignIn={() => {
                   setAdminError(null);
                   setAdminOpen(true);
@@ -889,6 +1149,111 @@ export function TrainingERP() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {editingCandidate && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md bg-white shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-lg">Edit candidate</CardTitle>
+              <CardDescription>
+                Candidate ID {editingCandidate.id} cannot be changed here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  const name = String(form.get('name') ?? '').trim();
+                  const phone = String(form.get('phone') ?? '').trim();
+                  const enrolledAt = String(form.get('enrolledAt') ?? '').trim();
+                  if (!name || !enrolledAt) return;
+                  void updateCandidateAdmin(editingCandidate.id, {
+                    name,
+                    phone,
+                    enrolledAt,
+                  });
+                }}
+              >
+                <label className="block text-sm font-medium">
+                  Learner name
+                  <Input
+                    required
+                    name="name"
+                    defaultValue={editingCandidate.name}
+                    className="mt-1.5"
+                  />
+                </label>
+                <label className="block text-sm font-medium">
+                  Phone number
+                  <Input
+                    name="phone"
+                    defaultValue={editingCandidate.phone}
+                    className="mt-1.5"
+                  />
+                </label>
+                <label className="block text-sm font-medium">
+                  Enrollment date
+                  <Input
+                    required
+                    type="date"
+                    name="enrolledAt"
+                    defaultValue={editingCandidate.enrolledAt}
+                    className="mt-1.5"
+                  />
+                </label>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditingCandidate(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={adminBusy}>
+                    {adminBusy ? 'Saving…' : 'Save changes'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {deletingCandidate && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md bg-white shadow-2xl">
+            <CardHeader>
+              <CardTitle className="text-lg">Delete candidate</CardTitle>
+              <CardDescription>
+                This permanently deletes {deletingCandidate.name} (
+                {deletingCandidate.id}) and all of their training sessions.
+                This cannot be undone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDeletingCandidate(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={adminBusy}
+                  onClick={() => void deleteCandidateAdmin(deletingCandidate.id)}
+                >
+                  {adminBusy ? 'Deleting…' : 'Delete permanently'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -1753,9 +2118,13 @@ function Reports({
 
 function SettingsRestricted({
   configured,
+  title = 'Settings are protected',
+  description = 'General users can work with candidate and training records, but only an administrator can view or change operational settings.',
   onSignIn,
 }: {
   configured: boolean;
+  title?: string;
+  description?: string;
   onSignIn: () => void;
 }) {
   return (
@@ -1768,10 +2137,10 @@ function SettingsRestricted({
           Administrator only
         </p>
         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em]">
-          Settings are protected
+          {title}
         </h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-[#686d81]">
-          General users can work with candidate and training records, but only an administrator can view or change operational settings.
+          {description}
         </p>
         {!configured && (
           <p className="mt-3 max-w-md text-xs leading-5 text-[#9b3039]">
@@ -1795,30 +2164,34 @@ function SettingsRestricted({
 function Settings({
   target,
   trainers,
+  timeSlots,
   saving,
+  busy,
   onChange,
   onSave,
+  onCreateTrainer,
+  onUpdateTrainer,
+  onSaveTimeSlots,
 }: {
   target: number;
   trainers: Trainer[];
+  timeSlots: string[];
   saving: boolean;
+  busy: boolean;
   onChange: (value: number) => void;
   onSave: (value: number) => Promise<void>;
+  onCreateTrainer: (name: string) => Promise<void>;
+  onUpdateTrainer: (
+    id: string,
+    changes: { name?: string; isActive?: boolean },
+  ) => Promise<void>;
+  onSaveTimeSlots: (slots: string[]) => Promise<void>;
 }) {
-  const slots = [
-    '07:00',
-    '07:30',
-    '08:00',
-    '08:30',
-    '09:00',
-    '09:30',
-    '10:00',
-    '10:30',
-    '11:00',
-    '11:30',
-    '15:30',
-    '16:00',
-  ];
+  const [newTrainerName, setNewTrainerName] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [newSlot, setNewSlot] = useState('');
+  const activeCount = trainers.filter((trainer) => trainer.isActive !== false).length;
   return (
     <>
       <section className="mb-7">
@@ -1870,29 +2243,130 @@ function Settings({
                 Active records populate the session form.
               </CardDescription>
             </div>
-            <Badge variant="outline">{trainers.length} active</Badge>
+            <Badge variant="outline">{activeCount} active</Badge>
           </CardHeader>
           <CardContent>
+            <form
+              className="flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const name = newTrainerName.trim();
+                if (!name) return;
+                void onCreateTrainer(name).then(() => setNewTrainerName(''));
+              }}
+            >
+              <Input
+                value={newTrainerName}
+                onChange={(event) => setNewTrainerName(event.target.value)}
+                placeholder="e.g. A. Kapoor"
+                className="h-9 text-sm"
+                disabled={busy}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                disabled={busy || !newTrainerName.trim()}
+              >
+                <Icon icon={PlusSignIcon} size={14} /> Add
+              </Button>
+            </form>
             {trainers.length ? (
-              <div className="space-y-2">
+              <div className="mt-4 space-y-2">
                 {trainers.map((trainer) => (
                   <div
                     key={trainer.id}
-                    className="flex items-center justify-between rounded-xl border border-[#e5e7f0] bg-[#fafbfe] px-3 py-2.5"
+                    className="flex items-center justify-between gap-2 rounded-xl border border-[#e5e7f0] bg-[#fafbfe] px-3 py-2.5"
                   >
-                    <span className="text-sm font-medium">{trainer.name}</span>
-                    <span className="font-mono text-[10px] text-[#85899b]">
-                      Trainer
-                    </span>
+                    {renamingId === trainer.id ? (
+                      <form
+                        className="flex flex-1 items-center gap-2"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const name = renameValue.trim();
+                          if (!name) return;
+                          void onUpdateTrainer(trainer.id, { name }).then(() =>
+                            setRenamingId(null),
+                          );
+                        }}
+                      >
+                        <Input
+                          autoFocus
+                          value={renameValue}
+                          onChange={(event) => setRenameValue(event.target.value)}
+                          className="h-8 text-sm"
+                          disabled={busy}
+                        />
+                        <Button type="submit" size="sm" disabled={busy}>
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setRenamingId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </form>
+                    ) : (
+                      <>
+                        <span
+                          className={
+                            'min-w-0 flex-1 truncate text-sm font-medium ' +
+                            (trainer.isActive === false
+                              ? 'text-[#a3a7bb] line-through'
+                              : '')
+                          }
+                        >
+                          {trainer.name}
+                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {trainer.isActive === false && (
+                            <Badge variant="outline" className="text-[10px]">
+                              Inactive
+                            </Badge>
+                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => {
+                              setRenamingId(trainer.id);
+                              setRenameValue(trainer.name);
+                            }}
+                          >
+                            Rename
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() =>
+                              void onUpdateTrainer(trainer.id, {
+                                isActive: trainer.isActive === false,
+                              })
+                            }
+                          >
+                            {trainer.isActive === false
+                              ? 'Reactivate'
+                              : 'Deactivate'}
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-[#73788d]">Loading trainer records…</p>
+              <p className="mt-4 text-sm text-[#73788d]">
+                Loading trainer records…
+              </p>
             )}
             <p className="mt-4 text-xs leading-5 text-[#73788d]">
-              Administrator-only changes to the trainer table will be added with
-              protected access later.
+              Deactivated trainers stay on past sessions but drop off the
+              training log's trainer list.
             </p>
           </CardContent>
         </Card>
@@ -1906,15 +2380,57 @@ function Settings({
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-2">
-              {slots.map((slot) => (
+            <form
+              className="flex gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!newSlot || timeSlots.includes(newSlot)) {
+                  setNewSlot('');
+                  return;
+                }
+                void onSaveTimeSlots([...timeSlots, newSlot].sort()).then(() =>
+                  setNewSlot(''),
+                );
+              }}
+            >
+              <Input
+                type="time"
+                value={newSlot}
+                onChange={(event) => setNewSlot(event.target.value)}
+                className="h-9 text-sm"
+                disabled={busy}
+              />
+              <Button type="submit" size="sm" disabled={busy || !newSlot}>
+                <Icon icon={PlusSignIcon} size={14} /> Add
+              </Button>
+            </form>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {timeSlots.map((slot) => (
                 <div
                   key={slot}
-                  className="rounded-lg border border-[#e5e7f0] bg-[#fafbfe] px-3 py-2 font-mono text-xs text-[#5559a8]"
+                  className="flex items-center justify-between gap-1 rounded-lg border border-[#e5e7f0] bg-[#fafbfe] px-2.5 py-2 font-mono text-xs text-[#5559a8]"
                 >
                   {slot}
+                  <button
+                    type="button"
+                    aria-label={'Remove ' + slot}
+                    disabled={busy}
+                    className="text-[#9a9ec2] hover:text-[#9b3039] disabled:pointer-events-none disabled:opacity-50"
+                    onClick={() =>
+                      void onSaveTimeSlots(
+                        timeSlots.filter((item) => item !== slot),
+                      )
+                    }
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
+              {!timeSlots.length && (
+                <p className="col-span-3 text-sm text-[#73788d]">
+                  No time slots configured.
+                </p>
+              )}
             </div>
             <div className="mt-6 border-t border-[#e5e7f0] pt-5">
               <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#85899b]">
@@ -1934,6 +2450,133 @@ function Settings({
           </CardContent>
         </Card>
       </div>
+    </>
+  );
+}
+
+function AdminCandidates({
+  candidates,
+  busy,
+  onEdit,
+  onToggleActive,
+  onDelete,
+}: {
+  candidates: AdminCandidateRecord[];
+  busy: boolean;
+  onEdit: (candidate: AdminCandidateRecord) => void;
+  onToggleActive: (candidate: AdminCandidateRecord) => void;
+  onDelete: (candidate: AdminCandidateRecord) => void;
+}) {
+  return (
+    <>
+      <section className="mb-7">
+        <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#747991]">
+          Administrator only
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-[-0.05em]">
+          Candidate records
+        </h2>
+        <p className="mt-2 text-sm text-[#686d81]">
+          Edit, deactivate, or permanently remove candidate records, including
+          learners hidden from the general dashboard.
+        </p>
+      </section>
+      <Card className="bg-white">
+        <CardHeader>
+          <div>
+            <CardTitle>All candidates</CardTitle>
+            <CardDescription>
+              Deleting a candidate also deletes their training sessions.
+            </CardDescription>
+          </div>
+          <Badge variant="outline">{candidates.length} records</Badge>
+        </CardHeader>
+        <CardContent>
+          {candidates.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Learner</TableHead>
+                  <TableHead>Candidate ID</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Enrollment
+                  </TableHead>
+                  <TableHead className="hidden lg:table-cell">
+                    Contact
+                  </TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {candidates.map((candidate) => (
+                  <TableRow key={candidate.id}>
+                    <TableCell className="font-medium">
+                      {candidate.name}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {candidate.id}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      {candidate.enrolledAt}
+                    </TableCell>
+                    <TableCell className="hidden font-mono text-xs lg:table-cell">
+                      {candidate.phone || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          (candidate.isActive
+                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                            : 'bg-zinc-100 text-zinc-600 ring-zinc-200') +
+                          ' ring-1'
+                        }
+                      >
+                        {candidate.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onEdit(candidate)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => onToggleActive(candidate)}
+                        >
+                          {candidate.isActive ? 'Deactivate' : 'Reactivate'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={busy}
+                          onClick={() => onDelete(candidate)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="py-10 text-center text-sm text-[#73788d]">
+              No candidate records yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }

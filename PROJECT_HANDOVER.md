@@ -37,7 +37,8 @@ The ERP uses individual URLs and pages, not one long single-page screen:
 | Candidate register | `/candidates` | Shows the candidate list, progress, enrollment date, contact, and remaining sessions. |
 | Training log | `/training-log` | Creates sessions and shows the session register. |
 | Reports | `/reports` | Shows completed sessions, attendance, no-shows, and portfolio completion. |
-| Settings | `/settings` | Administrator-only operational settings. |
+| Settings | `/settings` | Administrator-only operational settings: completion target, trainer directory, and time slots. |
+| Admin records | `/admin` | Administrator-only candidate register with edit, deactivate/reactivate, and permanent delete. |
 
 The dashboard can select a learner using `?candidate=<candidate-id>`, for example `/?candidate=87-26`.
 
@@ -99,7 +100,7 @@ All operational data is stored in Cloudflare D1 through the Worker API. It is no
 | `candidates` | Learner master records | `id`, `serial_number`, `enrollment_year`, `name`, `phone`, `enrolled_at`, `is_active`, `created_at` |
 | `trainers` | Trainer directory | `id`, `name`, `is_active`, `created_at` |
 | `training_sessions` | Candidate session history | `candidate_id`, `session_date`, `time_slot`, `status`, `trainer_id`, `trainer_name`, `notes` |
-| `settings` | Shared operational configuration | `training_target`, `updated_at` |
+| `settings` | Shared operational configuration | `training_target`, `time_slots` (JSON array), `updated_at` |
 | `admin_login_attempts` | Short-lived failed-admin-login rate-limit records | `client_hash`, `window_started`, `failure_count`, `blocked_until` |
 
 The schema is defined in [db/schema.ts](./db/schema.ts). Database migrations live in [drizzle](./drizzle).
@@ -119,11 +120,18 @@ The general ERP experience is available without an identity-provider, Cloudflare
 
 ### Administrator access
 
-Only Settings is restricted today. The page is hidden from the ordinary navigation and the Settings API rejects requests unless the browser has an administrator session.
+Settings and Admin records are restricted. Both pages are hidden from the ordinary navigation and their APIs reject requests unless the browser has an administrator session.
 
 To sign in, an administrator clicks **Admin sign in** inside the ERP and enters the value configured in the Cloudflare `ADMIN_PASSWORD` secret. A successful sign-in creates a signed, HTTP-only cookie for 30 minutes. The browser cannot read the cookie value.
 
-The current admin capability is changing the shared completion target. Administrator CRUD pages for trainers, candidates, and database tables are intentionally deferred.
+Administrator capabilities now include:
+
+- changing the shared completion target;
+- adding, renaming, deactivating, and reactivating trainer records (Settings);
+- adding and removing suggested training time slots (Settings); and
+- editing a candidate's name, phone, or enrollment date, deactivating/reactivating a candidate, and permanently deleting a candidate together with all of their training sessions (Admin records, `/admin`).
+
+Trainer and candidate records are never hard-deleted from the admin API except through the explicit candidate "Delete permanently" action; deactivating a trainer or candidate keeps the historical record (and any sessions) intact while removing it from general-facing lists.
 
 ### Admin-session protections
 
@@ -156,12 +164,13 @@ No Cloudflare Zero Trust, Access application, email allowlist, payment plan, or 
 
 | Endpoint | Access | Function |
 | --- | --- | --- |
-| `GET /api/erp` | General | Reads settings, active candidates, sessions, and active trainers. It seeds the two starter trainers when needed. |
+| `GET /api/erp` | General | Reads settings (including time slots), active candidates, sessions, and active trainers. It seeds the two starter trainers when needed. |
 | `POST /api/erp` | General | Creates candidates, creates sessions, or updates a session status. |
 | `GET /api/admin/session` | General | Reports whether the current browser has an admin session and whether admin sign-in is configured. |
 | `POST /api/admin/session` | General | Validates the administrator password and creates an admin session. |
 | `DELETE /api/admin/session` | General | Signs the browser out of administrator access. |
-| `POST /api/admin` | Admin only | Updates the training target in Settings. |
+| `GET /api/admin` | Admin only | Reads settings, all trainers (including inactive), and all candidates (including inactive) for the Settings and Admin records pages. |
+| `POST /api/admin` | Admin only | Updates the training target, time slots, or a trainer/candidate record (`action`: `settings`, `time-slots`, `trainer-create`, `trainer-update`, `candidate-update`, `candidate-delete`). |
 
 ## 8. Design system used
 
@@ -201,15 +210,14 @@ The project uses React, TypeScript, Vinext, Drizzle ORM/migrations, Cloudflare W
 | Candidate serials and trainer directory | Added enrollment date, serial-year IDs, and table-driven trainer names. |
 | Candidate picker search | Added name/serial search on the candidate dashboard selector. |
 | App-level admin sessions | Replaced the proposed Cloudflare Access approach with the requested in-app password model. |
+| Editable admin settings and candidate CRUD | Made the trainer directory and time slots editable in Settings, and added a dedicated `/admin` page for full candidate create/edit/deactivate/delete. |
 
 ## 11. Deliberately deferred work
 
 The following is not yet built and should be planned as a separate protected-admin phase:
 
-- CRUD table views for candidates, trainers, sessions, and settings;
-- adding, editing, disabling, or deleting trainer records from the UI;
-- editing/deactivating candidates from the UI;
-- richer settings such as editable session slots;
+- CRUD table views for training sessions (editing/deleting a logged session, beyond the existing status update);
+- hard-deleting a trainer record (trainers can only be deactivated/reactivated, to preserve historical session data);
 - a distinct authenticated general-user role, if general data must not be public;
 - user accounts, audit logs, password-reset flows, and per-user activity history;
 - data import/export and backups; and
@@ -219,6 +227,6 @@ The following is not yet built and should be planned as a separate protected-adm
 
 1. Use the ERP with a small set of real candidate and session records to validate the workflow.
 2. Decide whether the general-data exposure is acceptable. If not, add general-user authentication before entering sensitive personal data.
-3. Build the administrator CRUD area for trainers first, then candidate editing and session corrections.
+3. Extend administrator CRUD to training sessions (edit/delete a logged session).
 4. Add an audit trail before multiple staff members begin making administrative changes.
 5. Define an export/backup routine for the D1 database.

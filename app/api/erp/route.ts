@@ -1,4 +1,5 @@
 import { getD1 } from '@/db';
+import { parseTimeSlots } from '@/lib/time-slots';
 
 const sessionStatuses = new Set(['Completed', 'Scheduled', 'No-show', 'Cancelled']);
 const defaultTrainers = [
@@ -39,7 +40,7 @@ export async function GET() {
     const db = getD1();
     await ensureDefaultTrainers(db);
     const [settings, candidates, sessions, trainers] = await db.batch([
-      db.prepare('SELECT training_target AS trainingTarget FROM settings WHERE id = ?').bind('primary'),
+      db.prepare('SELECT training_target AS trainingTarget, time_slots AS timeSlots FROM settings WHERE id = ?').bind('primary'),
       db.prepare('SELECT id, serial_number AS serialNumber, enrollment_year AS enrollmentYear, name, phone, enrolled_at AS enrolledAt, is_active AS isActive FROM candidates WHERE is_active = 1 ORDER BY enrolled_at DESC, serial_number ASC, name ASC'),
       db.prepare(`SELECT
         s.id,
@@ -58,9 +59,12 @@ export async function GET() {
         LIMIT 100`),
       db.prepare('SELECT id, name FROM trainers WHERE is_active = 1 ORDER BY name ASC'),
     ]);
-    const primarySetting = settings.results[0] as { trainingTarget?: number } | undefined;
+    const primarySetting = settings.results[0] as
+      | { trainingTarget?: number; timeSlots?: unknown }
+      | undefined;
     return Response.json({
       trainingTarget: primarySetting?.trainingTarget ?? 15,
+      timeSlots: parseTimeSlots(primarySetting?.timeSlots),
       candidates: candidates.results,
       sessions: sessions.results,
       trainers: trainers.results,
