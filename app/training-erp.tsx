@@ -219,6 +219,7 @@ export function TrainingERP() {
   const [addOpen, setAddOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
+  const adminPasswordRef = useRef<HTMLInputElement>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminSaving, setAdminSaving] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -1110,7 +1111,7 @@ export function TrainingERP() {
           setAdminError(null);
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" initialFocus={adminPasswordRef}>
           <DialogHeader>
             <DialogTitle>Administrator sign in</DialogTitle>
             <DialogDescription>
@@ -1128,6 +1129,7 @@ export function TrainingERP() {
             <label className="block text-sm font-medium">
               Administrator password
               <Input
+                ref={adminPasswordRef}
                 autoFocus
                 required
                 type="password"
