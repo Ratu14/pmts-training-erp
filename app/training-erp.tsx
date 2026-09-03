@@ -574,25 +574,14 @@ export function TrainingERP() {
     }
   }
 
-  async function completeNext() {
-    const next = sessions.find((session) => session.status === 'Scheduled');
-    if (!next) {
-      setMessage('There are no scheduled sessions to complete.');
-      return;
-    }
+  async function updateSessionStatus(id: string, status: Status) {
     setSaving(true);
     setMessage(null);
     try {
-      await postERP({
-        action: 'session-status',
-        id: next.id,
-        status: 'Completed',
-      });
+      await postERP({ action: 'session-status', id, status });
       setSessions((current) =>
         current.map((session) =>
-          session.id === next.id
-            ? { ...session, status: 'Completed' }
-            : session,
+          session.id === id ? { ...session, status } : session,
         ),
       );
     } catch (error) {
@@ -604,6 +593,15 @@ export function TrainingERP() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function completeNext() {
+    const next = sessions.find((session) => session.status === 'Scheduled');
+    if (!next) {
+      setMessage('There are no scheduled sessions to complete.');
+      return;
+    }
+    await updateSessionStatus(next.id, 'Completed');
   }
 
   async function saveTarget(value: number) {
@@ -952,6 +950,7 @@ export function TrainingERP() {
               saving={saving}
               onCreate={createSession}
               onComplete={completeNext}
+              onUpdateStatus={updateSessionStatus}
             />
           )}
           {loaded && page.href === '/reports' && (
@@ -1812,6 +1811,7 @@ function TrainingLog({
   saving,
   onCreate,
   onComplete,
+  onUpdateStatus,
 }: {
   candidates: ProgressCandidate[];
   sessions: Session[];
@@ -1826,6 +1826,7 @@ function TrainingLog({
     notes: string;
   }) => Promise<void>;
   onComplete: () => Promise<void>;
+  onUpdateStatus: (id: string, status: Status) => Promise<void>;
 }) {
   const [candidateId, setCandidateId] = useState('');
   const [date, setDate] = useState(today());
@@ -2043,11 +2044,33 @@ function TrainingLog({
                       {session.trainer}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        className={statusStyle(session.status) + ' ring-1'}
-                      >
-                        {session.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          className={statusStyle(session.status) + ' ring-1'}
+                        >
+                          {session.status}
+                        </Badge>
+                        <select
+                          aria-label={
+                            'Update status for ' + session.candidateName
+                          }
+                          value={session.status}
+                          disabled={saving}
+                          onChange={(event) =>
+                            void onUpdateStatus(
+                              session.id,
+                              asStatus(event.target.value),
+                            )
+                          }
+                          className="h-7 rounded-md border border-[#dfe2ec] bg-white px-1.5 text-xs outline-none focus:border-[#7575cf] focus:ring-2 focus:ring-[#7575cf]/20"
+                        >
+                          {STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
