@@ -60,3 +60,27 @@ button, input { font: inherit; }
   .group\/card { transition: transform 180ms ease, box-shadow 180ms ease; }
   .group\/card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgb(37 37 94 / 6%); }
 }
+
+/* Touch input is less precise than a mouse, so give form fields a comfortable
+   hit area on touch devices only. Scoped to fields (never links or layout) so
+   pointer-precise desktop keeps its denser sizing. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='hidden']),
+  select,
+  textarea {
+    min-height: 2.75rem;
+  }
+}
+
+/* Honour the OS "reduce motion" setting everywhere, including the animation
+   utilities the UI primitives rely on. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
