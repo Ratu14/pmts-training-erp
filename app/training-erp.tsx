@@ -18,6 +18,18 @@ import {
   UserAdd02Icon,
   UserMultipleIcon,
 } from '@hugeicons/core-free-icons';
+import { XIcon } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,12 +39,28 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from '@/components/ui/chart';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import {
   Progress,
   ProgressLabel,
   ProgressValue,
 } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -910,19 +938,47 @@ export function TrainingERP() {
           {message && (
             <div
               role="status"
-              className="mb-5 rounded-xl border border-[#eed5d8] bg-[#fff7f7] px-4 py-3 text-sm text-[#9b3039]"
+              className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-[#eed5d8] bg-[#fff7f7] px-4 py-3 text-sm text-[#9b3039]"
             >
-              {message}
+              <p>{message}</p>
+              <button
+                type="button"
+                aria-label="Dismiss message"
+                onClick={() => setMessage(null)}
+                className="shrink-0 rounded-md p-0.5 text-[#9b3039]/70 hover:bg-[#9b3039]/10 hover:text-[#9b3039]"
+              >
+                <XIcon className="size-4" />
+              </button>
             </div>
           )}
           {!loaded && (
-            <Card className="bg-white">
-              <CardContent className="py-14 text-center">
-                <p className="font-mono text-xs uppercase tracking-[0.16em] text-[#777b91]">
-                  Loading PMTS records
-                </p>
-              </CardContent>
-            </Card>
+            <div className="space-y-6" aria-busy="true" aria-live="polite">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-2.5">
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-8 w-64" />
+                </div>
+                <Skeleton className="h-10 w-full max-w-xs rounded-xl sm:w-64" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <Card key={index} className="bg-white">
+                    <CardContent className="space-y-3">
+                      <Skeleton className="h-3 w-24" />
+                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-3 w-32" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              <Card className="bg-white">
+                <CardContent className="space-y-3 py-6">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <Skeleton key={index} className="h-10 w-full" />
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           )}
           {loaded && page.href === '/' && (
             <Dashboard
@@ -956,6 +1012,7 @@ export function TrainingERP() {
           {loaded && page.href === '/reports' && (
             <Reports
               candidates={rows}
+              sessions={sessions}
               completed={completed}
               noShows={noShows}
               attendance={attendance}
@@ -1014,248 +1071,257 @@ export function TrainingERP() {
         </div>
       </main>
 
-      {addOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-md bg-white shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-lg">Add a learner</CardTitle>
-              <CardDescription>
-                Create a candidate record in the PMTS database.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={submitCandidate}>
-                <label className="block text-sm font-medium">
-                  Learner name
-                  <Input
-                    required
-                    name="name"
-                    placeholder="e.g. Priya Banerjee"
-                    className="mt-1.5"
-                  />
-                </label>
-                <label className="block text-sm font-medium">
-                  Phone number
-                  <Input
-                    name="phone"
-                    placeholder="e.g. 9876543210"
-                    className="mt-1.5"
-                  />
-                </label>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm font-medium">
-                    Candidate serial number
-                    <Input
-                      required
-                      type="number"
-                      min="1"
-                      step="1"
-                      value={candidateSerial}
-                      onChange={(event) =>
-                        setCandidateSerial(event.target.value)
-                      }
-                      placeholder="e.g. 82"
-                      className="mt-1.5 font-mono"
-                    />
-                  </label>
-                  <label className="block text-sm font-medium">
-                    Enrollment date
-                    <Input
-                      required
-                      type="date"
-                      value={enrollmentDate}
-                      onChange={(event) =>
-                        setEnrollmentDate(event.target.value)
-                      }
-                      className="mt-1.5"
-                    />
-                  </label>
-                </div>
-                <div className="rounded-xl border border-[#dfe2ec] bg-[#fafbfe] px-3 py-2.5">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#85899b]">
-                    Candidate ID preview
-                  </p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-[#41418e]">
-                    {candidateCode(candidateSerial, enrollmentDate)}
-                  </p>
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setAddOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={saving}>
-                    <Icon icon={UserAdd02Icon} />{' '}
-                    {saving ? 'Saving…' : 'Create learner'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {adminOpen && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-md bg-white shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-lg">Administrator sign in</CardTitle>
-              <CardDescription>
-                Enter the administrator password to unlock Settings for this browser for 30 minutes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={submitAdminSignIn}>
-                <input
-                  aria-hidden="true"
-                  autoComplete="off"
-                  className="absolute -left-[9999px] size-px"
-                  name="website"
-                  tabIndex={-1}
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          if (!open) setAddOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a learner</DialogTitle>
+            <DialogDescription>
+              Create a candidate record in the PMTS database.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={submitCandidate}>
+            <label className="block text-sm font-medium">
+              Learner name
+              <Input
+                required
+                name="name"
+                placeholder="e.g. Priya Banerjee"
+                className="mt-1.5"
+              />
+            </label>
+            <label className="block text-sm font-medium">
+              Phone number
+              <Input
+                name="phone"
+                placeholder="e.g. 9876543210"
+                className="mt-1.5"
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Candidate serial number
+                <Input
+                  required
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={candidateSerial}
+                  onChange={(event) =>
+                    setCandidateSerial(event.target.value)
+                  }
+                  placeholder="e.g. 82"
+                  className="mt-1.5 font-mono"
                 />
-                <label className="block text-sm font-medium">
-                  Administrator password
-                  <Input
-                    autoFocus
-                    required
-                    type="password"
-                    value={adminPassword}
-                    onChange={(event) => setAdminPassword(event.target.value)}
-                    autoComplete="current-password"
-                    className="mt-1.5"
-                  />
-                </label>
-                {adminError && (
-                  <p className="text-sm text-[#9b3039]">{adminError}</p>
-                )}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setAdminOpen(false);
-                      setAdminPassword('');
-                      setAdminError(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={adminSaving}>
-                    {adminSaving ? 'Signing in…' : 'Sign in'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              </label>
+              <label className="block text-sm font-medium">
+                Enrollment date
+                <Input
+                  required
+                  type="date"
+                  value={enrollmentDate}
+                  onChange={(event) =>
+                    setEnrollmentDate(event.target.value)
+                  }
+                  className="mt-1.5"
+                />
+              </label>
+            </div>
+            <div className="rounded-xl border border-[#dfe2ec] bg-[#fafbfe] px-3 py-2.5">
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#85899b]">
+                Candidate ID preview
+              </p>
+              <p className="mt-1 font-mono text-sm font-semibold text-[#41418e]">
+                {candidateCode(candidateSerial, enrollmentDate)}
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAddOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                <Icon icon={UserAdd02Icon} />{' '}
+                {saving ? 'Saving…' : 'Create learner'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {editingCandidate && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-md bg-white shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-lg">Edit candidate</CardTitle>
-              <CardDescription>
-                Candidate ID {editingCandidate.id} cannot be changed here.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form
-                className="space-y-4"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const form = new FormData(event.currentTarget);
-                  const name = String(form.get('name') ?? '').trim();
-                  const phone = String(form.get('phone') ?? '').trim();
-                  const enrolledAt = String(form.get('enrolledAt') ?? '').trim();
-                  if (!name || !enrolledAt) return;
-                  void updateCandidateAdmin(editingCandidate.id, {
-                    name,
-                    phone,
-                    enrolledAt,
-                  });
+      <Dialog
+        open={adminOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAdminOpen(false);
+            setAdminPassword('');
+            setAdminError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Administrator sign in</DialogTitle>
+            <DialogDescription>
+              Enter the administrator password to unlock Settings for this browser for 30 minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={submitAdminSignIn}>
+            <input
+              aria-hidden="true"
+              autoComplete="off"
+              className="absolute -left-[9999px] size-px"
+              name="website"
+              tabIndex={-1}
+            />
+            <label className="block text-sm font-medium">
+              Administrator password
+              <Input
+                autoFocus
+                required
+                type="password"
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                autoComplete="current-password"
+                className="mt-1.5"
+              />
+            </label>
+            {adminError && (
+              <p className="text-sm text-[#9b3039]">{adminError}</p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setAdminOpen(false);
+                  setAdminPassword('');
+                  setAdminError(null);
                 }}
               >
-                <label className="block text-sm font-medium">
-                  Learner name
-                  <Input
-                    required
-                    name="name"
-                    defaultValue={editingCandidate.name}
-                    className="mt-1.5"
-                  />
-                </label>
-                <label className="block text-sm font-medium">
-                  Phone number
-                  <Input
-                    name="phone"
-                    defaultValue={editingCandidate.phone}
-                    className="mt-1.5"
-                  />
-                </label>
-                <label className="block text-sm font-medium">
-                  Enrollment date
-                  <Input
-                    required
-                    type="date"
-                    name="enrolledAt"
-                    defaultValue={editingCandidate.enrolledAt}
-                    className="mt-1.5"
-                  />
-                </label>
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setEditingCandidate(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={adminBusy}>
-                    {adminBusy ? 'Saving…' : 'Save changes'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                Cancel
+              </Button>
+              <Button type="submit" disabled={adminSaving}>
+                {adminSaving ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {deletingCandidate && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-[#151724]/30 p-4 backdrop-blur-sm">
-          <Card className="w-full max-w-md bg-white shadow-2xl">
-            <CardHeader>
-              <CardTitle className="text-lg">Delete candidate</CardTitle>
-              <CardDescription>
-                This permanently deletes {deletingCandidate.name} (
-                {deletingCandidate.id}) and all of their training sessions.
-                This cannot be undone.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex justify-end gap-2 pt-2">
+      {editingCandidate && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditingCandidate(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit candidate</DialogTitle>
+              <DialogDescription>
+                Candidate ID {editingCandidate.id} cannot be changed here.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                const name = String(form.get('name') ?? '').trim();
+                const phone = String(form.get('phone') ?? '').trim();
+                const enrolledAt = String(form.get('enrolledAt') ?? '').trim();
+                if (!name || !enrolledAt) return;
+                void updateCandidateAdmin(editingCandidate.id, {
+                  name,
+                  phone,
+                  enrolledAt,
+                });
+              }}
+            >
+              <label className="block text-sm font-medium">
+                Learner name
+                <Input
+                  required
+                  name="name"
+                  defaultValue={editingCandidate.name}
+                  className="mt-1.5"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Phone number
+                <Input
+                  name="phone"
+                  defaultValue={editingCandidate.phone}
+                  className="mt-1.5"
+                />
+              </label>
+              <label className="block text-sm font-medium">
+                Enrollment date
+                <Input
+                  required
+                  type="date"
+                  name="enrolledAt"
+                  defaultValue={editingCandidate.enrolledAt}
+                  className="mt-1.5"
+                />
+              </label>
+              <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setDeletingCandidate(null)}
+                  onClick={() => setEditingCandidate(null)}
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={adminBusy}
-                  onClick={() => void deleteCandidateAdmin(deletingCandidate.id)}
-                >
-                  {adminBusy ? 'Deleting…' : 'Delete permanently'}
+                <Button type="submit" disabled={adminBusy}>
+                  {adminBusy ? 'Saving…' : 'Save changes'}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deletingCandidate && (
+        <AlertDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDeletingCandidate(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete candidate</AlertDialogTitle>
+              <AlertDialogDescription>
+                This permanently deletes {deletingCandidate.name} (
+                {deletingCandidate.id}) and all of their training sessions.
+                This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={adminBusy}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={adminBusy}
+                onClick={() =>
+                  void deleteCandidateAdmin(deletingCandidate.id)
+                }
+              >
+                {adminBusy ? 'Deleting…' : 'Delete permanently'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
@@ -1904,19 +1970,19 @@ function TrainingLog({
             >
               <label className="text-sm font-medium">
                 Learner
-                <select
+                <NativeSelect
                   required
                   value={candidateId}
                   onChange={(event) => setCandidateId(event.target.value)}
-                  className="mt-1.5 h-9 w-full rounded-lg border border-[#dfe2ec] bg-white px-2.5 text-sm outline-none focus:border-[#7575cf] focus:ring-2 focus:ring-[#7575cf]/20"
+                  className="mt-1.5 w-full"
                 >
-                  <option value="">Select learner</option>
+                  <NativeSelectOption value="">Select learner</NativeSelectOption>
                   {candidates.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
+                    <NativeSelectOption key={candidate.id} value={candidate.id}>
                       {candidate.name} · {candidate.id}
-                    </option>
+                    </NativeSelectOption>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="text-sm font-medium">
                 Date
@@ -1940,34 +2006,34 @@ function TrainingLog({
               </label>
               <label className="text-sm font-medium">
                 Trainer
-                <select
+                <NativeSelect
                   required
                   value={trainerId}
                   onChange={(event) => setTrainerId(event.target.value)}
-                  className="mt-1.5 h-9 w-full rounded-lg border border-[#dfe2ec] bg-white px-2.5 text-sm outline-none focus:border-[#7575cf] focus:ring-2 focus:ring-[#7575cf]/20"
+                  className="mt-1.5 w-full"
                   disabled={!trainers.length}
                 >
-                  <option value="">
+                  <NativeSelectOption value="">
                     {trainers.length ? 'Select trainer' : 'Loading trainers…'}
-                  </option>
+                  </NativeSelectOption>
                   {trainers.map((trainer) => (
-                    <option key={trainer.id} value={trainer.id}>
+                    <NativeSelectOption key={trainer.id} value={trainer.id}>
                       {trainer.name}
-                    </option>
+                    </NativeSelectOption>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="text-sm font-medium">
                 Outcome
-                <select
+                <NativeSelect
                   value={status}
                   onChange={(event) => setStatus(asStatus(event.target.value))}
-                  className="mt-1.5 h-9 w-full rounded-lg border border-[#dfe2ec] bg-white px-2.5 text-sm outline-none focus:border-[#7575cf] focus:ring-2 focus:ring-[#7575cf]/20"
+                  className="mt-1.5 w-full"
                 >
                   {STATUSES.map((item) => (
-                    <option key={item}>{item}</option>
+                    <NativeSelectOption key={item}>{item}</NativeSelectOption>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               <label className="text-sm font-medium">
                 Notes
@@ -2050,7 +2116,8 @@ function TrainingLog({
                         >
                           {session.status}
                         </Badge>
-                        <select
+                        <NativeSelect
+                          size="sm"
                           aria-label={
                             'Update status for ' + session.candidateName
                           }
@@ -2062,14 +2129,14 @@ function TrainingLog({
                               asStatus(event.target.value),
                             )
                           }
-                          className="h-7 rounded-md border border-[#dfe2ec] bg-white px-1.5 text-xs outline-none focus:border-[#7575cf] focus:ring-2 focus:ring-[#7575cf]/20"
+                          className="text-xs"
                         >
                           {STATUSES.map((status) => (
-                            <option key={status} value={status}>
+                            <NativeSelectOption key={status} value={status}>
                               {status}
-                            </option>
+                            </NativeSelectOption>
                           ))}
-                        </select>
+                        </NativeSelect>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -2087,14 +2154,24 @@ function TrainingLog({
   );
 }
 
+const distributionChartConfig = {
+  candidates: { label: 'Learners', color: '#25255e' },
+} satisfies ChartConfig;
+
+const statusChartConfig = {
+  count: { label: 'Sessions', color: '#5559a8' },
+} satisfies ChartConfig;
+
 function Reports({
   candidates,
+  sessions,
   completed,
   noShows,
   attendance,
   target,
 }: {
   candidates: ProgressCandidate[];
+  sessions: Session[];
   completed: number;
   noShows: number;
   attendance: number;
@@ -2104,6 +2181,28 @@ function Reports({
   const portfolio = totalTarget
     ? Math.round((completed / totalTarget) * 100)
     : 0;
+
+  const distributionBuckets = [
+    { label: '0–24%', min: 0, max: 25 },
+    { label: '25–49%', min: 25, max: 50 },
+    { label: '50–74%', min: 50, max: 75 },
+    { label: '75–99%', min: 75, max: 100 },
+    { label: '100%', min: 100, max: Infinity },
+  ];
+  const distribution = distributionBuckets.map((bucket) => ({
+    label: bucket.label,
+    candidates: candidates.filter(
+      (candidate) =>
+        candidate.percentage >= bucket.min &&
+        candidate.percentage < bucket.max,
+    ).length,
+  }));
+
+  const statusCounts = STATUSES.map((status) => ({
+    status,
+    count: sessions.filter((session) => session.status === status).length,
+  }));
+
   return (
     <>
       <section className="mb-7">
@@ -2134,6 +2233,106 @@ function Reports({
           value={String(noShows)}
           detail={'Portfolio completion: ' + String(portfolio) + '%'}
         />
+      </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <Card className="bg-white">
+          <CardHeader>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#8a8ea0]">
+                Programme spread
+              </p>
+              <CardTitle className="mt-1 text-lg">
+                Completion distribution
+              </CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {candidates.length ? (
+              <ChartContainer
+                config={distributionChartConfig}
+                className="aspect-auto h-64 w-full"
+              >
+                <BarChart data={distribution} margin={{ left: -20 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                    fontSize={11}
+                    width={28}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar
+                    dataKey="candidates"
+                    fill="var(--color-candidates)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <p className="py-10 text-center text-sm text-[#73788d]">
+                No learners yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card className="bg-white">
+          <CardHeader>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#8a8ea0]">
+                Session outcomes
+              </p>
+              <CardTitle className="mt-1 text-lg">Status breakdown</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {sessions.length ? (
+              <ChartContainer
+                config={statusChartConfig}
+                className="aspect-auto h-64 w-full"
+              >
+                <BarChart
+                  data={statusCounts}
+                  layout="vertical"
+                  margin={{ left: 8 }}
+                >
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                  <XAxis
+                    type="number"
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                    fontSize={11}
+                  />
+                  <YAxis
+                    dataKey="status"
+                    type="category"
+                    tickLine={false}
+                    axisLine={false}
+                    width={78}
+                    fontSize={11}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar
+                    dataKey="count"
+                    fill="var(--color-count)"
+                    radius={[0, 6, 6, 0]}
+                  />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <p className="py-10 text-center text-sm text-[#73788d]">
+                No sessions logged yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );
